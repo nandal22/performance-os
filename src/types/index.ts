@@ -88,6 +88,7 @@ export interface Goal {
   exercise_id?: string;   // for lift goals
   target_value: number;
   target_date?: string;
+  notes?: string;         // user-visible label, e.g. "Run 40km", "Beach body"
   is_active: boolean;
   created_at: string;
 }

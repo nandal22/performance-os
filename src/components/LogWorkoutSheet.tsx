@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { X, CheckCircle2, Trash2, ChevronDown, Plus, Pencil, Star, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import type { Activity, Exercise } from '@/types';
+import type { Activity, Exercise, ExerciseCategory } from '@/types';
 import { activitiesService } from '@/services/activities';
 import { exercisesService } from '@/services/exercises';
 import { strengthSetsService } from '@/services/strengthSets';
@@ -81,6 +81,9 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
 
   // Draft restore banner
   const [draftToRestore, setDraftToRestore] = useState<WorkoutDraft | null>(null);
+
+  // New exercise category (when creating inline)
+  const [newExCategory, setNewExCategory] = useState<ExerciseCategory>('other');
 
   // Cardio
   const [distance, setDistance] = useState('');
@@ -219,7 +222,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
     try {
       const ex = await exercisesService.createCustom({
         name:              exSearch.trim(),
-        category:          'other',
+        category:          newExCategory,
         primary_muscle:    'General',
         secondary_muscles: [],
       });
@@ -227,6 +230,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
       setCurrentEx({ id: ex.id, name: ex.name });
       setShowPicker(false);
       setExSearch('');
+      setNewExCategory('other');
       toast.success(`Exercise "${ex.name}" created`);
       setTimeout(() => repsRef.current?.focus(), 50);
     } catch {
@@ -472,14 +476,34 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                             </button>
                           ))}
                           {canCreateEx && (
-                            <button
-                              onMouseDown={createExercise}
-                              disabled={creatingEx}
-                              className="w-full text-left px-3 py-2.5 text-sm text-primary hover:bg-white/5 flex items-center gap-2 disabled:opacity-50"
-                            >
-                              <Plus className="w-4 h-4 flex-shrink-0" />
-                              {creatingEx ? 'Creating…' : `Create "${exSearch.trim()}"`}
-                            </button>
+                            <div className="border-t border-white/10">
+                              <div className="px-3 pt-2 pb-1">
+                                <p className="text-[10px] text-muted-foreground mb-1.5">Category</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {(['push','pull','legs','core','cardio','mobility','other'] as ExerciseCategory[]).map(cat => (
+                                    <button
+                                      key={cat}
+                                      onMouseDown={e => { e.preventDefault(); setNewExCategory(cat); }}
+                                      className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize transition-colors ${
+                                        newExCategory === cat
+                                          ? 'bg-primary text-primary-foreground'
+                                          : 'bg-white/10 text-white/60 hover:bg-white/20'
+                                      }`}
+                                    >
+                                      {cat}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <button
+                                onMouseDown={createExercise}
+                                disabled={creatingEx}
+                                className="w-full text-left px-3 py-2.5 text-sm text-primary hover:bg-white/5 flex items-center gap-2 disabled:opacity-50"
+                              >
+                                <Plus className="w-4 h-4 flex-shrink-0" />
+                                {creatingEx ? 'Creating…' : `Create "${exSearch.trim()}" · ${newExCategory}`}
+                              </button>
+                            </div>
                           )}
                           {filteredExercises.length === 0 && !canCreateEx && (
                             <p className="px-3 py-3 text-sm text-muted-foreground">No exercises found</p>
