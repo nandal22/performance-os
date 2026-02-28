@@ -58,4 +58,32 @@ export const exercisesService = {
       .eq('is_custom', true);
     if (error) throw error;
   },
+
+  // Check whether any strength sets reference this exercise
+  hasUsedSets: async (id: string): Promise<boolean> => {
+    const { count, error } = await supabase
+      .from('strength_sets')
+      .select('id', { count: 'exact', head: true })
+      .eq('exercise_id', id);
+    if (error) throw error;
+    return (count ?? 0) > 0;
+  },
+
+  // Tracked exercises (stored in localStorage — client-side preference)
+  getTrackedIds: (): string[] => {
+    try { return JSON.parse(localStorage.getItem('perf-os-tracked') || '[]'); }
+    catch { return []; }
+  },
+
+  isTracked: (id: string): boolean => {
+    return exercisesService.getTrackedIds().includes(id);
+  },
+
+  toggleTracked: (id: string): boolean => {
+    const ids = new Set(exercisesService.getTrackedIds());
+    const wasTracked = ids.has(id);
+    wasTracked ? ids.delete(id) : ids.add(id);
+    localStorage.setItem('perf-os-tracked', JSON.stringify([...ids]));
+    return !wasTracked;
+  },
 };

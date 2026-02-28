@@ -7,12 +7,14 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Dumbbell, Plus } from 'lucide-react';
 import LogWorkoutSheet from '@/components/LogWorkoutSheet';
+import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
 
 export default function DashboardPage() {
   const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
-  const [latestMetric, setLatestMetric] = useState<BodyMetric | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [showSheet, setShowSheet] = useState(false);
+  const [latestMetric,     setLatestMetric]     = useState<BodyMetric | null>(null);
+  const [loading,          setLoading]          = useState(true);
+  const [showSheet,        setShowSheet]        = useState(false);
+  const [selectedId,       setSelectedId]       = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -112,18 +114,22 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-2">
               {recentActivities.map(a => (
-                <div key={a.id} className="rounded-xl bg-white/5 border border-white/10 p-3 flex items-center gap-3">
+                <button
+                  key={a.id}
+                  onClick={() => setSelectedId(a.id)}
+                  className="w-full rounded-xl bg-white/5 border border-white/10 p-3 flex items-center gap-3 text-left active:scale-[0.98] transition-transform"
+                >
                   <span className="text-xl">{typeIcon[a.type] ?? '⚡'}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-white capitalize truncate">{a.type}</p>
                     <p className="text-xs text-muted-foreground">
-                      {format(new Date(a.date), 'MMM d')} {a.duration ? `· ${a.duration}min` : ''}
+                      {format(new Date(a.date + 'T12:00:00'), 'MMM d')} {a.duration ? `· ${a.duration}min` : ''}
                     </p>
                   </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${typeColor[a.type]}`}>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${typeColor[a.type]}`}>
                     {a.type}
                   </span>
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -131,9 +137,8 @@ export default function DashboardPage() {
 
         {/* Phase indicator */}
         <div className="rounded-2xl bg-primary/5 border border-primary/20 p-4 text-center">
-          <p className="text-xs text-primary font-medium mb-1">Phase 2 Active ⚡</p>
-          <p className="text-xs text-muted-foreground">Workout Logging · Analytics Engine</p>
-          <p className="text-xs text-muted-foreground mt-1">Phase 3: Goals & Predictions coming next</p>
+          <p className="text-xs text-primary font-medium mb-1">Phase 3 Active ⚡</p>
+          <p className="text-xs text-muted-foreground">History · Goals · Exercise Tracking</p>
         </div>
       </main>
 
@@ -151,10 +156,14 @@ export default function DashboardPage() {
       <LogWorkoutSheet
         open={showSheet}
         onClose={() => setShowSheet(false)}
-        onSuccess={() => {
-          setLoading(true);
-          load();
-        }}
+        onSuccess={() => { setLoading(true); load(); }}
+      />
+
+      {/* Workout Detail Sheet */}
+      <WorkoutDetailSheet
+        activityId={selectedId}
+        onClose={() => setSelectedId(null)}
+        onDeleted={() => { setSelectedId(null); load(); }}
       />
     </div>
   );

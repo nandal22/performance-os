@@ -3,9 +3,11 @@ import { Toaster } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import LoginPage    from '@/pages/LoginPage';
 import DashboardPage from '@/pages/DashboardPage';
-import SleepPage    from '@/pages/SleepPage';
+import SleepPage     from '@/pages/SleepPage';
 import AnalyticsPage from '@/pages/AnalyticsPage';
-import BottomNav    from '@/components/BottomNav';
+import HistoryPage   from '@/pages/HistoryPage';
+import GoalsPage     from '@/pages/GoalsPage';
+import BottomNav     from '@/components/BottomNav';
 
 function LoadingScreen() {
   return (
@@ -34,8 +36,10 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedLayout />}>
           <Route path="/"          element={<DashboardPage />} />
+          <Route path="/history"   element={<HistoryPage />}   />
           <Route path="/sleep"     element={<SleepPage />}     />
           <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/goals"     element={<GoalsPage />}     />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
