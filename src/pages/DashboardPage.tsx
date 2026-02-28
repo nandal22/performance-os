@@ -1,33 +1,35 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { signOut } from '@/hooks/useAuth';
 import { activitiesService } from '@/services/activities';
 import { bodyMetricsService } from '@/services/bodyMetrics';
 import type { Activity, BodyMetric } from '@/types';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { Dumbbell, Plus } from 'lucide-react';
+import LogWorkoutSheet from '@/components/LogWorkoutSheet';
 
 export default function DashboardPage() {
   const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
   const [latestMetric, setLatestMetric] = useState<BodyMetric | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showSheet, setShowSheet] = useState(false);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [activities, metrics] = await Promise.all([
-          activitiesService.getAll(5),
-          bodyMetricsService.getAll(1),
-        ]);
-        setRecentActivities(activities);
-        setLatestMetric(metrics[0] ?? null);
-      } catch {
-        toast.error('Failed to load data');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+  const load = useCallback(async () => {
+    try {
+      const [activities, metrics] = await Promise.all([
+        activitiesService.getAll(5),
+        bodyMetricsService.getAll(1),
+      ]);
+      setRecentActivities(activities);
+      setLatestMetric(metrics[0] ?? null);
+    } catch {
+      toast.error('Failed to load data');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const typeColor: Record<string, string> = {
     strength: 'text-blue-400 bg-blue-400/10',
@@ -45,9 +47,14 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-lg px-4 pt-6 pb-4 flex items-center justify-between border-b border-white/5">
-        <div>
-          <h1 className="text-lg font-bold text-white">Performance OS</h1>
-          <p className="text-xs text-muted-foreground">{format(new Date(), 'EEEE, MMM d')}</p>
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-primary/15 flex items-center justify-center">
+            <Dumbbell className="w-4 h-4 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-base font-bold text-white leading-tight">Performance OS</h1>
+            <p className="text-xs text-muted-foreground">{format(new Date(), 'EEEE, MMM d')}</p>
+          </div>
         </div>
         <button
           onClick={signOut}
@@ -57,11 +64,13 @@ export default function DashboardPage() {
         </button>
       </header>
 
-      <main className="flex-1 px-4 py-6 space-y-6 max-w-lg mx-auto w-full">
+      <main className="flex-1 px-4 py-6 space-y-6 max-w-lg mx-auto w-full pb-24">
         {/* Body metrics snapshot */}
         {latestMetric && (
           <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
-            <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">Latest Body Metrics · {format(new Date(latestMetric.date), 'MMM d')}</p>
+            <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">
+              Latest Body Metrics · {format(new Date(latestMetric.date), 'MMM d')}
+            </p>
             <div className="grid grid-cols-3 gap-3">
               {latestMetric.weight && (
                 <div className="text-center">
@@ -96,7 +105,9 @@ export default function DashboardPage() {
             <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center">
               <p className="text-3xl mb-2">🏋️</p>
               <p className="text-sm text-muted-foreground">No workouts yet</p>
-              <p className="text-xs text-muted-foreground mt-1">Phase 2 will add logging — coming next</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Tap <strong className="text-white">+</strong> to log your first workout
+              </p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -105,9 +116,13 @@ export default function DashboardPage() {
                   <span className="text-xl">{typeIcon[a.type] ?? '⚡'}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-white capitalize truncate">{a.type}</p>
-                    <p className="text-xs text-muted-foreground">{format(new Date(a.date), 'MMM d')} {a.duration ? `· ${a.duration}min` : ''}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {format(new Date(a.date), 'MMM d')} {a.duration ? `· ${a.duration}min` : ''}
+                    </p>
                   </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${typeColor[a.type]}`}>{a.type}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${typeColor[a.type]}`}>
+                    {a.type}
+                  </span>
                 </div>
               ))}
             </div>
@@ -116,11 +131,30 @@ export default function DashboardPage() {
 
         {/* Phase indicator */}
         <div className="rounded-2xl bg-primary/5 border border-primary/20 p-4 text-center">
-          <p className="text-xs text-primary font-medium mb-1">Phase 1 Complete ✓</p>
-          <p className="text-xs text-muted-foreground">Database · Types · Services · Auth</p>
-          <p className="text-xs text-muted-foreground mt-1">Phase 2: Analytics Engine coming next</p>
+          <p className="text-xs text-primary font-medium mb-1">Phase 2 Active ⚡</p>
+          <p className="text-xs text-muted-foreground">Workout Logging · Analytics Engine</p>
+          <p className="text-xs text-muted-foreground mt-1">Phase 3: Goals & Predictions coming next</p>
         </div>
       </main>
+
+      {/* Floating Action Button */}
+      <button
+        onClick={() => setShowSheet(true)}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/25 hover:scale-105 active:scale-95 transition-transform z-30"
+        aria-label="Log workout"
+      >
+        <Plus className="w-6 h-6 text-black" />
+      </button>
+
+      {/* Log Workout Sheet */}
+      <LogWorkoutSheet
+        open={showSheet}
+        onClose={() => setShowSheet(false)}
+        onSuccess={() => {
+          setLoading(true);
+          load();
+        }}
+      />
     </div>
   );
 }
