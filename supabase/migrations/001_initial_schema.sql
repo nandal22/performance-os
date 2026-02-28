@@ -171,8 +171,8 @@ INSERT INTO exercises (name, category, primary_muscle, secondary_muscles, equipm
   ('Overhead Press',     'push', 'Shoulders',ARRAY['Triceps'],              'barbell',   false),
   ('Push-up',            'push', 'Chest',   ARRAY['Triceps', 'Shoulders'], 'bodyweight', false),
   ('Dumbbell Flye',      'push', 'Chest',   ARRAY['Front Delt'],           'dumbbell',  false),
-  ('Lateral Raise',      'push', 'Shoulders',ARRAY[],                      'dumbbell',  false),
-  ('Tricep Pushdown',    'push', 'Triceps', ARRAY[],                       'cable',     false),
+  ('Lateral Raise',      'push', 'Shoulders',ARRAY[]::text[],                      'dumbbell',  false),
+  ('Tricep Pushdown',    'push', 'Triceps', ARRAY[]::text[],                       'cable',     false),
   -- PULL
   ('Deadlift',           'pull', 'Back',    ARRAY['Hamstrings', 'Glutes'], 'barbell',   false),
   ('Pull-up',            'pull', 'Back',    ARRAY['Biceps'],               'bodyweight',false),
@@ -184,10 +184,10 @@ INSERT INTO exercises (name, category, primary_muscle, secondary_muscles, equipm
   ('Squat',              'legs', 'Quads',   ARRAY['Glutes', 'Hamstrings'], 'barbell',   false),
   ('Romanian Deadlift',  'legs', 'Hamstrings',ARRAY['Glutes', 'Back'],     'barbell',   false),
   ('Leg Press',          'legs', 'Quads',   ARRAY['Glutes'],               'machine',   false),
-  ('Leg Curl',           'legs', 'Hamstrings',ARRAY[],                     'machine',   false),
-  ('Calf Raise',         'legs', 'Calves',  ARRAY[],                       'machine',   false),
+  ('Leg Curl',           'legs', 'Hamstrings',ARRAY[]::text[],                     'machine',   false),
+  ('Calf Raise',         'legs', 'Calves',  ARRAY[]::text[],                       'machine',   false),
   ('Hip Thrust',         'legs', 'Glutes',  ARRAY['Hamstrings'],           'barbell',   false),
   -- CORE
   ('Plank',              'core', 'Abs',     ARRAY['Lower Back'],           'bodyweight',false),
   ('Ab Wheel Rollout',   'core', 'Abs',     ARRAY['Lats'],                 'bodyweight',false),
-  ('Cable Crunch',       'core', 'Abs',     ARRAY[],                       'cable',     false);
+  ('Cable Crunch',       'core', 'Abs',     ARRAY[]::text[],                       'cable',     false);
