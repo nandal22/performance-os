@@ -64,7 +64,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-lg px-4 pt-6 pb-4 flex items-center justify-between border-b border-white/5">
+      <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-lg px-4 pt-safe pb-4 flex items-center justify-between border-b border-white/5">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-primary/15 flex items-center justify-center">
             <Dumbbell className="w-4 h-4 text-primary" />

@@ -73,7 +73,7 @@ export default function SleepPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-lg px-4 pt-6 pb-4 border-b border-white/5">
+      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-lg px-4 pt-safe pb-4 border-b border-white/5">
         <h1 className="text-lg font-bold text-white">Sleep</h1>
         <p className="text-xs text-muted-foreground">Track your recovery</p>
       </header>
