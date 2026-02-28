@@ -70,4 +70,33 @@ export const strengthSetsService = {
     if (error) throw error;
     return data as PRRecord[];
   },
+
+  // Get the most recent session's sets for a given exercise (for progressive overload hints)
+  getLastSession: async (exerciseId: string): Promise<{ date: string; sets: { reps: number; weight: number; set_number: number }[] } | null> => {
+    const { data, error } = await supabase
+      .from('strength_sets')
+      .select('reps, weight, set_number, activity:activities!inner(date)')
+      .eq('exercise_id', exerciseId)
+      .order('created_at', { ascending: false })
+      .limit(30);
+    if (error) throw error;
+    if (!data || data.length === 0) return null;
+
+    // Group by activity date and take the most recent date
+    const byDate: Record<string, { reps: number; weight: number; set_number: number }[]> = {};
+    for (const s of data) {
+      const date = ((s.activity as unknown) as { date: string } | null)?.date ?? '';
+      if (!date) continue;
+      if (!byDate[date]) byDate[date] = [];
+      byDate[date].push({ reps: s.reps ?? 0, weight: s.weight ?? 0, set_number: s.set_number ?? 0 });
+    }
+
+    const dates = Object.keys(byDate).sort().reverse();
+    if (dates.length === 0) return null;
+
+    return {
+      date: dates[0],
+      sets: byDate[dates[0]].sort((a, b) => a.set_number - b.set_number),
+    };
+  },
 };

@@ -140,6 +140,22 @@ export interface WeeklyLoad {
   status: 'undertraining' | 'optimal' | 'overtraining';
 }
 
+// ---- Sleep ----
+
+export interface SleepLog {
+  id:           string;
+  user_id:      string;
+  date:         string;         // wake-up date YYYY-MM-DD
+  bedtime?:     string;         // "23:30"
+  wake_time?:   string;         // "07:00"
+  duration_hrs?: number;        // hours
+  quality?:     number;         // 1–5
+  notes?:       string;
+  created_at:   string;
+}
+
+export type CreateSleepLog = Omit<SleepLog, 'id' | 'user_id' | 'created_at'>;
+
 // ---- Forms / Input Types ----
 
 export type CreateActivity = Omit<Activity, 'id' | 'user_id' | 'created_at' | 'updated_at'>;

@@ -64,7 +64,7 @@ export default function DashboardPage() {
         </button>
       </header>
 
-      <main className="flex-1 px-4 py-6 space-y-6 max-w-lg mx-auto w-full pb-24">
+      <main className="flex-1 px-4 py-6 space-y-6 max-w-lg mx-auto w-full pb-nav">
         {/* Body metrics snapshot */}
         {latestMetric && (
           <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
@@ -137,10 +137,11 @@ export default function DashboardPage() {
         </div>
       </main>
 
-      {/* Floating Action Button */}
+      {/* Floating Action Button — sits above bottom nav */}
       <button
         onClick={() => setShowSheet(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/25 hover:scale-105 active:scale-95 transition-transform z-30"
+        style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' }}
+        className="fixed right-5 w-14 h-14 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/30 active:scale-95 transition-transform z-30"
         aria-label="Log workout"
       >
         <Plus className="w-6 h-6 text-black" />

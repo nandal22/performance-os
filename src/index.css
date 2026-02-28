@@ -30,7 +30,30 @@ body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
   min-height: 100vh;
+  min-height: 100dvh; /* dynamic viewport height — handles iOS address bar */
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  overscroll-behavior: none;
 }
+
+/* ── iOS safe area utilities ── */
+.pt-safe  { padding-top:    env(safe-area-inset-top,    0px); }
+.pb-safe  { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.pb-nav   { padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px)); }
+
+/* ── Prevent iOS input zoom (font-size < 16px triggers auto-zoom) ── */
+input[type="text"],
+input[type="number"],
+input[type="date"],
+input[type="time"],
+input[type="email"],
+input[type="search"],
+textarea,
+select {
+  font-size: 16px;
+}
+
+/* ── Hide scrollbar but keep scroll ── */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
