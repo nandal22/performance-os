@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS goals (
 
 ALTER TABLE goals ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "goals_own" ON goals;
 CREATE POLICY "goals_own" ON goals
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);

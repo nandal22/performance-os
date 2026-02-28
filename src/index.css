@@ -17,6 +17,7 @@
   --input: 220 10% 18%;
   --ring: 217 91% 60%;
   --radius: 0.75rem;
+  color-scheme: dark; /* tell iOS/Safari to render controls in dark mode */
 }
 
 * {
@@ -52,6 +53,29 @@ input[type="search"],
 textarea,
 select {
   font-size: 16px;
+  color-scheme: dark; /* force dark date/time pickers and scrollbars */
+}
+
+/* ── Calendar/clock picker icon — invert so it's visible on dark bg ── */
+input::-webkit-calendar-picker-indicator {
+  filter: invert(0.75) brightness(1.2);
+  cursor: pointer;
+}
+
+/* ── Custom select — remove default OS arrow, add our own ── */
+select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='rgba(255,255,255,0.3)' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px !important;
+}
+
+/* options inside select — force dark bg so text is readable */
+option {
+  background-color: hsl(220 13% 12%);
+  color: hsl(0 0% 95%);
 }
 
 /* ── Hide scrollbar but keep scroll ── */

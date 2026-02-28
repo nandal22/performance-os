@@ -33,6 +33,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  autoResume?: boolean; // if true, auto-restore draft without asking
 }
 
 const TYPES = [
@@ -43,7 +44,7 @@ const TYPES = [
   { value: 'custom',   label: 'Other',    icon: '⚡' },
 ] as const;
 
-export default function LogWorkoutSheet({ open, onClose, onSuccess }: Props) {
+export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume = false }: Props) {
   // Session metadata
   const [type,     setType]     = useState<Activity['type']>('strength');
   const [date,     setDate]     = useState(toISODate(new Date()));
@@ -103,14 +104,21 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess }: Props) {
       if (!raw) return;
       const draft: WorkoutDraft = JSON.parse(raw);
       if (Date.now() - draft.savedAt < 86400000 && draft.loggedSets.length > 0) {
-        setDraftToRestore(draft);
+        if (autoResume) {
+          // Auto-restore immediately (opened via "Continue Workout" button)
+          setType(draft.type);
+          setDate(draft.date);
+          setLoggedSets(draft.loggedSets);
+        } else {
+          setDraftToRestore(draft);
+        }
       } else {
         localStorage.removeItem(DRAFT_KEY);
       }
     } catch {
       localStorage.removeItem(DRAFT_KEY);
     }
-  }, [open]);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch last session whenever exercise changes
   useEffect(() => {

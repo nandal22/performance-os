@@ -9,12 +9,28 @@ import { Dumbbell, Plus } from 'lucide-react';
 import LogWorkoutSheet from '@/components/LogWorkoutSheet';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
 
+const DRAFT_KEY = 'perf-os-draft';
+
+interface DraftMeta { loggedSets: unknown[]; savedAt: number }
+
+function readDraft(): DraftMeta | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const d: DraftMeta = JSON.parse(raw);
+    if (Date.now() - d.savedAt > 86400000) { localStorage.removeItem(DRAFT_KEY); return null; }
+    return d.loggedSets.length > 0 ? d : null;
+  } catch { return null; }
+}
+
 export default function DashboardPage() {
   const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
   const [latestMetric,     setLatestMetric]     = useState<BodyMetric | null>(null);
   const [loading,          setLoading]          = useState(true);
   const [showSheet,        setShowSheet]        = useState(false);
+  const [resumingDraft,    setResumingDraft]    = useState(false);
   const [selectedId,       setSelectedId]       = useState<string | null>(null);
+  const [draft,            setDraft]            = useState<DraftMeta | null>(readDraft);
 
   const load = useCallback(async () => {
     try {
@@ -67,6 +83,24 @@ export default function DashboardPage() {
       </header>
 
       <main className="flex-1 px-4 py-6 space-y-6 max-w-lg mx-auto w-full pb-nav">
+
+        {/* Active workout draft banner */}
+        {draft && (
+          <button
+            onClick={() => { setResumingDraft(true); setShowSheet(true); }}
+            className="w-full flex items-center gap-3 rounded-2xl bg-primary/10 border border-primary/30 p-4 text-left active:scale-[0.98] transition-transform"
+          >
+            <span className="text-2xl">💪</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-primary">Continue Workout</p>
+              <p className="text-xs text-muted-foreground">
+                {draft.loggedSets.length} set{draft.loggedSets.length !== 1 ? 's' : ''} in progress — tap to resume
+              </p>
+            </div>
+            <span className="text-primary text-lg">›</span>
+          </button>
+        )}
+
         {/* Body metrics snapshot */}
         {latestMetric && (
           <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
@@ -144,7 +178,7 @@ export default function DashboardPage() {
 
       {/* Floating Action Button — sits above bottom nav */}
       <button
-        onClick={() => setShowSheet(true)}
+        onClick={() => { setResumingDraft(false); setShowSheet(true); }}
         style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' }}
         className="fixed right-5 w-14 h-14 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/30 active:scale-95 transition-transform z-30"
         aria-label="Log workout"
@@ -155,8 +189,9 @@ export default function DashboardPage() {
       {/* Log Workout Sheet */}
       <LogWorkoutSheet
         open={showSheet}
-        onClose={() => setShowSheet(false)}
-        onSuccess={() => { setLoading(true); load(); }}
+        autoResume={resumingDraft}
+        onClose={() => { setShowSheet(false); setResumingDraft(false); setDraft(readDraft()); }}
+        onSuccess={() => { setLoading(true); load(); setDraft(null); setResumingDraft(false); }}
       />
 
       {/* Workout Detail Sheet */}
