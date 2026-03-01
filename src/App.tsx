@@ -1,13 +1,14 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
-import LoginPage    from '@/pages/LoginPage';
-import DashboardPage from '@/pages/DashboardPage';
-import HistoryPage   from '@/pages/HistoryPage';
-import ProgressPage  from '@/pages/ProgressPage';
-import GoalsPage     from '@/pages/GoalsPage';
-import SettingsPage  from '@/pages/SettingsPage';
-import BottomNav     from '@/components/BottomNav';
+import LoginPage        from '@/pages/LoginPage';
+import DashboardPage    from '@/pages/DashboardPage';
+import HistoryPage      from '@/pages/HistoryPage';
+import ProgressPage     from '@/pages/ProgressPage';
+import GoalsPage        from '@/pages/GoalsPage';
+import BodyMetricsPage  from '@/pages/BodyMetricsPage';
+import SettingsPage     from '@/pages/SettingsPage';
+import BottomNav        from '@/components/BottomNav';
 
 function LoadingScreen() {
   return (
@@ -36,10 +37,11 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedLayout />}>
           <Route path="/"          element={<DashboardPage />} />
-          <Route path="/history"  element={<HistoryPage />}  />
-          <Route path="/progress" element={<ProgressPage />} />
-          <Route path="/goals"    element={<GoalsPage />}    />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/history"  element={<HistoryPage />}     />
+          <Route path="/progress" element={<ProgressPage />}   />
+          <Route path="/goals"    element={<GoalsPage />}       />
+          <Route path="/body"     element={<BodyMetricsPage />} />
+          <Route path="/settings" element={<SettingsPage />}    />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

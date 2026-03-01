@@ -1,11 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Clock, TrendingUp, Target, Settings } from 'lucide-react';
+import { Home, Clock, TrendingUp, Target, Scale, Settings } from 'lucide-react';
 
 const TABS = [
   { path: '/',          icon: Home,       label: 'Home'     },
   { path: '/history',   icon: Clock,      label: 'History'  },
   { path: '/progress',  icon: TrendingUp, label: 'Progress' },
   { path: '/goals',     icon: Target,     label: 'Goals'    },
+  { path: '/body',      icon: Scale,      label: 'Body'     },
   { path: '/settings',  icon: Settings,   label: 'Settings' },
 ] as const;
 

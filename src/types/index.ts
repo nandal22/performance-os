@@ -6,6 +6,8 @@
 
 export type ActivityType = 'strength' | 'cardio' | 'sport' | 'mobility' | 'custom';
 
+export type Gender = 'male' | 'female';
+
 export type GoalType = 'weight' | 'waist' | 'lift' | 'cardio_distance' | 'cardio_time' | 'body_fat';
 
 export type ExerciseCategory = 'push' | 'pull' | 'legs' | 'core' | 'cardio' | 'mobility' | 'other';
@@ -70,6 +72,9 @@ export interface BodyMetric {
   user_id: string;
   date: string;           // ISO date YYYY-MM-DD
   weight?: number;        // kg
+  height?: number;        // cm (rarely changes; latest value used for BMR)
+  age?: number;           // years at time of log
+  gender?: Gender;        // 'male' | 'female' (for Mifflin-St Jeor)
   waist?: number;         // cm
   chest?: number;         // cm
   thigh?: number;         // cm

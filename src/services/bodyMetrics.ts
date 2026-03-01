@@ -55,4 +55,50 @@ export const bodyMetricsService = {
     const { error } = await supabase.from('body_metrics').delete().eq('id', id);
     if (error) throw error;
   },
+
+  // Get the single most recent entry (for dashboard / engine seed)
+  getLatest: async (): Promise<BodyMetric | null> => {
+    const { data, error } = await supabase
+      .from('body_metrics')
+      .select('*')
+      .order('date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return data as BodyMetric | null;
+  },
+
+  // Build the best available MetricsProfile by scanning history for
+  // the latest non-null value of each rarely-changing field (height, age, gender).
+  // Always takes weight from the most recent entry.
+  getLatestProfile: async (): Promise<{
+    weight: number | null;
+    height: number | null;
+    age:    number | null;
+    gender: 'male' | 'female' | null;
+    lastWeightDate: string | null;
+  }> => {
+    const { data, error } = await supabase
+      .from('body_metrics')
+      .select('date, weight, height, age, gender')
+      .order('date', { ascending: false })
+      .limit(90);
+    if (error) throw error;
+
+    const rows = (data ?? []) as Pick<BodyMetric, 'date' | 'weight' | 'height' | 'age' | 'gender'>[];
+
+    const latestWeight = rows.find(r => r.weight)?.weight ?? null;
+    const lastWeightDate = rows.find(r => r.weight)?.date ?? null;
+    const latestHeight = rows.find(r => r.height)?.height ?? null;
+    const latestAge    = rows.find(r => r.age)?.age ?? null;
+    const latestGender = (rows.find(r => r.gender)?.gender ?? null) as 'male' | 'female' | null;
+
+    return {
+      weight: latestWeight,
+      height: latestHeight,
+      age:    latestAge,
+      gender: latestGender,
+      lastWeightDate,
+    };
+  },
 };
