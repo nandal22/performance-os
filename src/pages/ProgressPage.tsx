@@ -40,6 +40,7 @@ export default function ProgressPage() {
   const [newExCategory, setNewExCategory] = useState<ExerciseCategory>('push');
   const [creatingEx, setCreatingEx]       = useState(false);
   const [showMore, setShowMore]           = useState(false);
+  const [pickerCat, setPickerCat]         = useState<ExerciseCategory | 'all'>('all');
 
   useEffect(() => {
     exercisesService.getAll().then(setExercises).catch(() => {});
@@ -102,12 +103,16 @@ export default function ProgressPage() {
   }, [selectedEx, loadExerciseData]);
 
   const filteredExercises = exercises
-    .filter(e => !search || e.name.toLowerCase().includes(search.toLowerCase()))
+    .filter(e => {
+      const matchesSearch = !search || e.name.toLowerCase().includes(search.toLowerCase());
+      const matchesCat = pickerCat === 'all' || e.category === pickerCat;
+      return matchesSearch && matchesCat;
+    })
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const canCreate =
     search.trim().length > 1 &&
-    !filteredExercises.some(e => e.name.toLowerCase() === search.trim().toLowerCase());
+    !exercises.some(e => e.name.toLowerCase() === search.trim().toLowerCase());
 
   const handleCreateExercise = async () => {
     setCreatingEx(true);
@@ -402,7 +407,7 @@ export default function ProgressPage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm"
-              onClick={() => setShowPicker(false)}
+              onClick={() => { setShowPicker(false); setSearch(''); setPickerCat('all'); }}
             />
             <motion.div
               initial={{ y: '100%' }}
@@ -414,35 +419,130 @@ export default function ProgressPage() {
               onClick={e => e.stopPropagation()}
             >
               {/* Handle */}
-              <div className="flex justify-center pt-3 pb-2 flex-shrink-0">
+              <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
                 <div className="w-10 h-1 bg-white/20 rounded-full" />
               </div>
 
-              <p className="text-sm font-semibold text-white px-4 pb-2 flex-shrink-0">Select Exercise</p>
+              {/* Header row */}
+              <div className="flex items-center justify-between px-4 py-2 flex-shrink-0">
+                <p className="text-sm font-semibold text-white">Select Exercise</p>
+                <span className="text-[11px] text-muted-foreground">
+                  {filteredExercises.length} result{filteredExercises.length !== 1 ? 's' : ''}
+                </span>
+              </div>
 
-              <input
-                autoFocus
-                type="text"
-                placeholder="Search…"
-                className="mx-4 mb-2 flex-shrink-0 glass rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-primary/40"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
+              {/* Search input */}
+              <div className="px-4 mb-2 flex-shrink-0">
+                <div className="relative">
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="Search exercises…"
+                    className="w-full glass rounded-2xl pl-10 pr-3 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                  />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25 pointer-events-none" />
+                  {search && (
+                    <motion.button
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      whileTap={{ scale: 0.85 }}
+                      onClick={() => setSearch('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 hover:text-white/60"
+                    >
+                      ✕
+                    </motion.button>
+                  )}
+                </div>
+              </div>
 
+              {/* Category filter chips */}
+              <div className="flex-shrink-0 px-4 mb-2">
+                <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                  {(['all', ...CATEGORIES] as const).map(cat => {
+                    const active = pickerCat === cat;
+                    const count = cat === 'all'
+                      ? exercises.filter(e => !search || e.name.toLowerCase().includes(search.toLowerCase())).length
+                      : exercises.filter(e => e.category === cat && (!search || e.name.toLowerCase().includes(search.toLowerCase()))).length;
+                    return (
+                      <motion.button
+                        key={cat}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => setPickerCat(cat)}
+                        className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium capitalize transition-colors flex items-center gap-1 ${
+                          active
+                            ? 'bg-primary text-white'
+                            : 'bg-white/[0.06] text-muted-foreground hover:bg-white/[0.10]'
+                        }`}
+                      >
+                        {cat}
+                        {count > 0 && (
+                          <span className={`text-[10px] ${active ? 'text-white/70' : 'text-white/25'}`}>
+                            {count}
+                          </span>
+                        )}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Results list */}
               <div className="flex-1 overflow-y-auto px-4 space-y-0.5 min-h-0">
-                {filteredExercises.map(ex => (
-                  <motion.button
-                    key={ex.id}
-                    whileTap={{ scale: 0.98 }}
-                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-white/[0.05] flex items-center justify-between transition-colors"
-                    onClick={() => { setSelectedEx(ex); setShowPicker(false); setSearch(''); }}
-                  >
-                    <span className="text-sm text-white">{ex.name}</span>
-                    <span className="text-xs text-muted-foreground capitalize">{ex.category}</span>
-                  </motion.button>
-                ))}
+                <AnimatePresence mode="popLayout">
+                  {filteredExercises.map((ex, i) => {
+                    const query = search.toLowerCase();
+                    const name = ex.name;
+                    const matchIdx = query ? name.toLowerCase().indexOf(query) : -1;
+
+                    return (
+                      <motion.button
+                        key={ex.id}
+                        layout
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ delay: i * 0.02, type: 'spring', stiffness: 400, damping: 28 }}
+                        whileTap={{ scale: 0.97 }}
+                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-white/[0.05] flex items-center justify-between transition-colors group"
+                        onClick={() => { setSelectedEx(ex); setShowPicker(false); setSearch(''); setPickerCat('all'); }}
+                      >
+                        <span className="text-sm text-white">
+                          {matchIdx >= 0 ? (
+                            <>
+                              {name.slice(0, matchIdx)}
+                              <mark className="bg-primary/30 text-primary rounded px-0.5">
+                                {name.slice(matchIdx, matchIdx + query.length)}
+                              </mark>
+                              {name.slice(matchIdx + query.length)}
+                            </>
+                          ) : name}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground capitalize group-hover:text-white/40 transition-colors">
+                          {ex.category}
+                        </span>
+                      </motion.button>
+                    );
+                  })}
+                </AnimatePresence>
+
                 {filteredExercises.length === 0 && !canCreate && (
-                  <p className="text-sm text-muted-foreground text-center py-6">No exercises found</p>
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="py-10 text-center"
+                  >
+                    <p className="text-3xl mb-2">🔍</p>
+                    <p className="text-sm text-muted-foreground">
+                      {search ? `No results for "${search}"` : 'No exercises in this category'}
+                    </p>
+                    {search && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Type a unique name below to create it
+                      </p>
+                    )}
+                  </motion.div>
                 )}
               </div>
 
