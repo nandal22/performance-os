@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { exercisesService } from '@/services/exercises';
 import { strengthSetsService } from '@/services/strengthSets';
-import type { Exercise } from '@/types';
+import type { Exercise, ExerciseCategory } from '@/types';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { format } from 'date-fns';
-import { ChevronDown, Search } from 'lucide-react';
+import { ChevronDown, Search, Plus } from 'lucide-react';
 import { toast } from 'sonner';
+
+const CATEGORIES: ExerciseCategory[] = ['push', 'pull', 'legs', 'core', 'cardio', 'mobility', 'other'];
 
 interface SessionStat {
   date: string;
@@ -20,13 +22,15 @@ interface PR {
 }
 
 export default function ProgressPage() {
-  const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [selectedEx, setSelectedEx] = useState<Exercise | null>(null);
-  const [sessions, setSessions] = useState<SessionStat[]>([]);
-  const [pr, setPR] = useState<PR | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [showPicker, setShowPicker] = useState(false);
-  const [search, setSearch] = useState('');
+  const [exercises, setExercises]       = useState<Exercise[]>([]);
+  const [selectedEx, setSelectedEx]     = useState<Exercise | null>(null);
+  const [sessions, setSessions]         = useState<SessionStat[]>([]);
+  const [pr, setPR]                     = useState<PR | null>(null);
+  const [loading, setLoading]           = useState(false);
+  const [showPicker, setShowPicker]     = useState(false);
+  const [search, setSearch]             = useState('');
+  const [newExCategory, setNewExCategory] = useState<ExerciseCategory>('push');
+  const [creatingEx, setCreatingEx]     = useState(false);
 
   useEffect(() => {
     exercisesService.getAll().then(setExercises).catch(() => {});
@@ -86,6 +90,26 @@ export default function ProgressPage() {
   const filteredExercises = exercises
     .filter(e => !search || e.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name));
+
+  const canCreate =
+    search.trim().length > 1 &&
+    !filteredExercises.some(e => e.name.toLowerCase() === search.trim().toLowerCase());
+
+  const handleCreateExercise = async () => {
+    setCreatingEx(true);
+    try {
+      const ex = await exercisesService.createCustom({ name: search.trim(), category: newExCategory, primary_muscle: '', secondary_muscles: [] });
+      setExercises(prev => [...prev, ex]);
+      setSelectedEx(ex);
+      setShowPicker(false);
+      setSearch('');
+      toast.success(`"${ex.name}" added!`);
+    } catch {
+      toast.error('Failed to create exercise');
+    } finally {
+      setCreatingEx(false);
+    }
+  };
 
   const chartData = sessions.slice(-20).map(s => ({ date: s.date, weight: s.maxWeight }));
   const totalSets = sessions.reduce((sum, s) => sum + s.totalSets, 0);
@@ -288,26 +312,51 @@ export default function ProgressPage() {
               onChange={e => setSearch(e.target.value)}
             />
 
-            <div className="flex-1 overflow-y-auto px-4 pb-8 space-y-1">
-              {filteredExercises.length === 0 ? (
+            <div className="flex-1 overflow-y-auto px-4 space-y-1">
+              {filteredExercises.map(ex => (
+                <button
+                  key={ex.id}
+                  className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-white/5 flex items-center justify-between"
+                  onClick={() => { setSelectedEx(ex); setShowPicker(false); setSearch(''); }}
+                >
+                  <span className="text-sm text-white">{ex.name}</span>
+                  <span className="text-xs text-muted-foreground capitalize">{ex.category}</span>
+                </button>
+              ))}
+              {filteredExercises.length === 0 && !canCreate && (
                 <p className="text-sm text-muted-foreground text-center py-6">No exercises found</p>
-              ) : (
-                filteredExercises.map(ex => (
-                  <button
-                    key={ex.id}
-                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-white/5 flex items-center justify-between"
-                    onClick={() => {
-                      setSelectedEx(ex);
-                      setShowPicker(false);
-                      setSearch('');
-                    }}
-                  >
-                    <span className="text-sm text-white">{ex.name}</span>
-                    <span className="text-xs text-muted-foreground capitalize">{ex.category}</span>
-                  </button>
-                ))
               )}
             </div>
+
+            {/* Create new exercise inline */}
+            {canCreate && (
+              <div className="px-4 pt-2 pb-6 border-t border-white/10 space-y-2">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Create new</p>
+                <div className="flex flex-wrap gap-1">
+                  {CATEGORIES.map(cat => (
+                    <button
+                      key={cat}
+                      onMouseDown={e => { e.preventDefault(); setNewExCategory(cat); }}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize transition-colors ${
+                        newExCategory === cat
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-white/5 text-muted-foreground'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onMouseDown={e => { e.preventDefault(); handleCreateExercise(); }}
+                  disabled={creatingEx}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-primary/10 border border-primary/20 text-sm text-primary font-medium disabled:opacity-50"
+                >
+                  <Plus className="w-4 h-4 flex-shrink-0" />
+                  {creatingEx ? 'Creating…' : `Create "${search.trim()}" · ${newExCategory}`}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

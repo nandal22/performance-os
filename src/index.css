@@ -89,3 +89,37 @@ option {
 [data-sonner-toaster][data-y-position="top"] {
   top: max(16px, env(safe-area-inset-top, 16px)) !important;
 }
+
+/* ── Light theme ── */
+[data-theme="light"] {
+  --background: 210 20% 96%;
+  --foreground: 220 20% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 220 20% 10%;
+  --primary: 217 91% 48%;
+  --primary-foreground: 0 0% 100%;
+  --muted: 210 15% 90%;
+  --muted-foreground: 220 10% 42%;
+  --border: 210 15% 82%;
+  --input: 210 15% 88%;
+  color-scheme: light;
+}
+
+/* Remap white-tinted utilities to dark-tinted in light mode */
+[data-theme="light"] .text-white                     { color: hsl(220 20% 8%) !important; }
+[data-theme="light"] .text-white\/20                 { color: hsl(220 20% 8% / 0.28) !important; }
+[data-theme="light"] .text-white\/30                 { color: hsl(220 20% 8% / 0.38) !important; }
+[data-theme="light"] .text-white\/40                 { color: hsl(220 20% 8% / 0.48) !important; }
+[data-theme="light"] .bg-white\/5                    { background-color: hsl(220 20% 8% / 0.05) !important; }
+[data-theme="light"] .bg-white\/10                   { background-color: hsl(220 20% 8% / 0.09) !important; }
+[data-theme="light"] .border-white\/5                { border-color: hsl(220 20% 8% / 0.08) !important; }
+[data-theme="light"] .border-white\/10               { border-color: hsl(220 20% 8% / 0.13) !important; }
+[data-theme="light"] .border-white\/\[0\.08\]        { border-color: hsl(220 20% 8% / 0.09) !important; }
+[data-theme="light"] .bg-background\/80              { background-color: hsl(210 20% 96% / 0.92) !important; }
+[data-theme="light"] .bg-background\/95              { background-color: hsl(210 20% 97% / 0.97) !important; }
+[data-theme="light"] .placeholder\:text-white\/20\:\:placeholder { color: hsl(220 20% 8% / 0.30) !important; }
+[data-theme="light"] .placeholder\:text-white\/25\:\:placeholder { color: hsl(220 20% 8% / 0.38) !important; }
+[data-theme="light"] .placeholder\:text-white\/30\:\:placeholder { color: hsl(220 20% 8% / 0.45) !important; }
+[data-theme="light"] input,
+[data-theme="light"] textarea,
+[data-theme="light"] select { color: hsl(220 20% 8%) !important; -webkit-text-fill-color: hsl(220 20% 8%) !important; }

@@ -99,12 +99,13 @@ export default function GoalsPage() {
   const [logDate,   setLogDate]   = useState(toISODate(new Date()));
   const [savingLog, setSavingLog] = useState(false);
 
-  const [formName,     setFormName]     = useState('');
-  const [formType,     setFormType]     = useState<GoalType>('lift');
-  const [formTarget,   setFormTarget]   = useState('');
-  const [formExercise, setFormExercise] = useState('');
-  const [formDate,     setFormDate]     = useState('');
-  const [savingGoal,   setSavingGoal]   = useState(false);
+  const [formName,       setFormName]       = useState('');
+  const [formType,       setFormType]       = useState<GoalType>('lift');
+  const [formTarget,     setFormTarget]     = useState('');
+  const [formTargetReps, setFormTargetReps] = useState('');
+  const [formExercise,   setFormExercise]   = useState('');
+  const [formDate,       setFormDate]       = useState('');
+  const [savingGoal,     setSavingGoal]     = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -158,6 +159,7 @@ export default function GoalsPage() {
     try {
       const created = await goalsService.create({
         type: formType, target_value: parseFloat(formTarget),
+        target_reps: formType === 'lift' && formTargetReps ? parseInt(formTargetReps) : undefined,
         target_date: formDate || undefined,
         exercise_id: formType === 'lift' ? formExercise : undefined,
         notes: formName.trim(), is_active: true,
@@ -165,7 +167,7 @@ export default function GoalsPage() {
       setGoals(prev => [created, ...prev]);
       setGoalLogs(prev => ({ ...prev, [created.id]: [] }));
       setShowForm(false);
-      setFormName(''); setFormType('lift'); setFormTarget(''); setFormExercise(''); setFormDate('');
+      setFormName(''); setFormType('lift'); setFormTarget(''); setFormTargetReps(''); setFormExercise(''); setFormDate('');
       toast.success('Goal added!');
     } catch { toast.error('Failed to save goal'); }
     finally { setSavingGoal(false); }
@@ -220,7 +222,11 @@ export default function GoalsPage() {
                   <div className="flex-1 min-w-0 pr-2">
                     <p className="text-sm font-semibold text-white truncate">{name}</p>
                     <p className="text-xs text-muted-foreground">
-                      Target: <span className="text-white font-medium">{goal.target_value} {GOAL_UNITS[goal.type]}</span>
+                      Target:{' '}
+                      <span className="text-white font-medium">
+                        {goal.target_value} {GOAL_UNITS[goal.type]}
+                        {goal.target_reps && goal.type === 'lift' ? ` × ${goal.target_reps}` : ''}
+                      </span>
                       {goal.target_date && ` · by ${format(new Date(goal.target_date + 'T12:00:00'), 'MMM d, yyyy')}`}
                     </p>
                   </div>
@@ -335,11 +341,20 @@ export default function GoalsPage() {
               </div>
             )}
 
-            <div>
-              <label className="text-xs text-muted-foreground block mb-1.5">Target ({GOAL_UNITS[formType]})</label>
-              <input type="number" inputMode="decimal" step="0.5"
-                placeholder={formType === 'cardio_distance' ? '42.2' : formType === 'cardio_time' ? '30' : formType === 'weight' ? '75' : '100'}
-                value={formTarget} onChange={e => setFormTarget(e.target.value)} className={fieldCls} />
+            <div className={formType === 'lift' ? 'grid grid-cols-2 gap-3' : ''}>
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1.5">Target ({GOAL_UNITS[formType]})</label>
+                <input type="number" inputMode="decimal" step="0.5"
+                  placeholder={formType === 'cardio_distance' ? '42.2' : formType === 'cardio_time' ? '30' : formType === 'weight' ? '75' : '100'}
+                  value={formTarget} onChange={e => setFormTarget(e.target.value)} className={fieldCls} />
+              </div>
+              {formType === 'lift' && (
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1.5">Target reps <span className="text-white/30">(optional)</span></label>
+                  <input type="number" inputMode="numeric" placeholder="e.g. 3"
+                    value={formTargetReps} onChange={e => setFormTargetReps(e.target.value)} className={fieldCls} />
+                </div>
+              )}
             </div>
 
             <div>

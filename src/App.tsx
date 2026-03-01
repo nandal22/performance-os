@@ -6,6 +6,7 @@ import DashboardPage from '@/pages/DashboardPage';
 import HistoryPage   from '@/pages/HistoryPage';
 import ProgressPage  from '@/pages/ProgressPage';
 import GoalsPage     from '@/pages/GoalsPage';
+import SettingsPage  from '@/pages/SettingsPage';
 import BottomNav     from '@/components/BottomNav';
 
 function LoadingScreen() {
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="/history"  element={<HistoryPage />}  />
           <Route path="/progress" element={<ProgressPage />} />
           <Route path="/goals"    element={<GoalsPage />}    />
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -1,11 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Clock, TrendingUp, Target } from 'lucide-react';
+import { Home, Clock, TrendingUp, Target, Settings } from 'lucide-react';
 
 const TABS = [
   { path: '/',          icon: Home,       label: 'Home'     },
   { path: '/history',   icon: Clock,      label: 'History'  },
   { path: '/progress',  icon: TrendingUp, label: 'Progress' },
   { path: '/goals',     icon: Target,     label: 'Goals'    },
+  { path: '/settings',  icon: Settings,   label: 'Settings' },
 ] as const;
 
 export default function BottomNav() {
@@ -13,7 +14,7 @@ export default function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 inset-x-0 z-20 bg-[#0a0a0a]/95 backdrop-blur-xl border-t border-white/5"
+      className="fixed bottom-0 inset-x-0 z-20 bg-background/95 backdrop-blur-xl border-t border-white/5"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       <div className="flex max-w-lg mx-auto">
