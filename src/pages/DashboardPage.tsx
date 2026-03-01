@@ -5,7 +5,8 @@ import { bodyMetricsService } from '@/services/bodyMetrics';
 import type { Activity, BodyMetric } from '@/types';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { Dumbbell, Plus } from 'lucide-react';
+import { Dumbbell, Plus, Flame } from 'lucide-react';
+import { calcActivityCalories } from '@/engines/calorieEngine';
 import LogWorkoutSheet from '@/components/LogWorkoutSheet';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
 
@@ -35,7 +36,7 @@ export default function DashboardPage() {
   const load = useCallback(async () => {
     try {
       const [activities, metrics] = await Promise.all([
-        activitiesService.getAll(5),
+        activitiesService.getAll(20),
         bodyMetricsService.getAll(1),
       ]);
       setRecentActivities(activities);
@@ -130,6 +131,29 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Weekly burn card */}
+        {(() => {
+          const weightKg = latestMetric?.weight ?? 0;
+          if (!weightKg || recentActivities.length === 0) return null;
+          const cutoff = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+          const thisWeek = recentActivities.filter(a => a.date >= cutoff);
+          if (thisWeek.length === 0) return null;
+          const weekKcal = thisWeek.reduce(
+            (sum, a) => sum + calcActivityCalories(a.type, a.duration ?? 30, weightKg).calories, 0,
+          );
+          return (
+            <div className="rounded-2xl bg-orange-500/10 border border-orange-500/20 p-4 flex items-center gap-3">
+              <Flame className="w-8 h-8 text-orange-400 flex-shrink-0" />
+              <div>
+                <p className="text-xl font-bold text-white">~{weekKcal.toLocaleString()} kcal</p>
+                <p className="text-xs text-muted-foreground">
+                  burned this week · {thisWeek.length} workout{thisWeek.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Recent activity */}
         <div>
           <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">Recent Workouts</p>
@@ -147,7 +171,10 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {recentActivities.map(a => (
+              {recentActivities.slice(0, 5).map(a => {
+                const weightKg = latestMetric?.weight ?? 0;
+                const kcal = weightKg > 0 ? calcActivityCalories(a.type, a.duration ?? 30, weightKg).calories : 0;
+                return (
                 <button
                   key={a.id}
                   onClick={() => setSelectedId(a.id)}
@@ -160,11 +187,15 @@ export default function DashboardPage() {
                       {format(new Date(a.date + 'T12:00:00'), 'MMM d')} {a.duration ? `· ${a.duration}min` : ''}
                     </p>
                   </div>
+                  {kcal > 0 && (
+                    <span className="text-xs text-orange-400 font-medium flex-shrink-0 mr-1">~{kcal}</span>
+                  )}
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${typeColor[a.type]}`}>
                     {a.type}
                   </span>
                 </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

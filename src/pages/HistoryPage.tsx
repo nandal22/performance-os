@@ -3,6 +3,8 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import type { Activity } from '@/types';
 import { activitiesService } from '@/services/activities';
+import { bodyMetricsService } from '@/services/bodyMetrics';
+import { calcActivityCalories } from '@/engines/calorieEngine';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
 
 const FILTERS = [
@@ -26,6 +28,7 @@ const typeColor: Record<string, string> = {
 
 export default function HistoryPage() {
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [weightKg,   setWeightKg]   = useState(0);
   const [loading, setLoading] = useState(true);
   const [filterDays, setFilterDays] = useState<7 | 30 | 90 | 0>(30);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -33,8 +36,12 @@ export default function HistoryPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await activitiesService.getAll(300);
+      const [data, profile] = await Promise.all([
+        activitiesService.getAll(300),
+        bodyMetricsService.getLatestProfile(),
+      ]);
       setActivities(data);
+      setWeightKg(profile.weight ?? 0);
     } catch {
       toast.error('Failed to load history');
     } finally {
@@ -100,12 +107,22 @@ export default function HistoryPage() {
               .sort(([a], [b]) => b.localeCompare(a))
               .map(([month, acts]) => (
                 <div key={month}>
-                  <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-                    {format(new Date(month + '-15'), 'MMMM yyyy')}
-                    <span className="ml-2 normal-case">· {acts.length}</span>
-                  </p>
+                  {(() => {
+                    const monthKcal = weightKg > 0
+                      ? acts.reduce((sum, a) => sum + calcActivityCalories(a.type, a.duration ?? 30, weightKg).calories, 0)
+                      : 0;
+                    return (
+                      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
+                        {format(new Date(month + '-15'), 'MMMM yyyy')}
+                        <span className="ml-2 normal-case">· {acts.length}</span>
+                        {monthKcal > 0 && <span className="ml-2 normal-case text-orange-400">· ~{monthKcal.toLocaleString()} kcal</span>}
+                      </p>
+                    );
+                  })()}
                   <div className="space-y-2">
-                    {acts.map(a => (
+                    {acts.map(a => {
+                      const kcal = weightKg > 0 ? calcActivityCalories(a.type, a.duration ?? 30, weightKg).calories : 0;
+                      return (
                       <button
                         key={a.id}
                         onClick={() => setSelectedId(a.id)}
@@ -119,11 +136,17 @@ export default function HistoryPage() {
                             {a.duration ? ` · ${a.duration}min` : ''}
                           </p>
                         </div>
+                        {kcal > 0 && (
+                          <span className="text-xs text-orange-400 font-medium flex-shrink-0 mr-1">
+                            ~{kcal} kcal
+                          </span>
+                        )}
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${typeColor[a.type]}`}>
                           {a.type}
                         </span>
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ))}
