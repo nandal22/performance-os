@@ -5,8 +5,8 @@ import { bodyMetricsService } from '@/services/bodyMetrics';
 import type { Activity, BodyMetric } from '@/types';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { Dumbbell, Plus, Flame } from 'lucide-react';
-import { calcActivityCalories } from '@/engines/calorieEngine';
+import { Dumbbell, Plus, ChevronRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import LogWorkoutSheet from '@/components/LogWorkoutSheet';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
 
@@ -24,6 +24,19 @@ function readDraft(): DraftMeta | null {
   } catch { return null; }
 }
 
+const TYPE_CONFIG: Record<string, { bg: string; icon: string; accent: string }> = {
+  strength: { bg: 'bg-blue-500/10',   icon: '💪', accent: 'bg-blue-500' },
+  cardio:   { bg: 'bg-orange-500/10', icon: '🏃', accent: 'bg-orange-500' },
+  sport:    { bg: 'bg-green-500/10',  icon: '⚽', accent: 'bg-green-500' },
+  mobility: { bg: 'bg-purple-500/10', icon: '🧘', accent: 'bg-purple-500' },
+  custom:   { bg: 'bg-slate-500/10',  icon: '⚡', accent: 'bg-slate-500' },
+};
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 14 },
+  show:   { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 380, damping: 28 } },
+};
+
 export default function DashboardPage() {
   const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
   const [latestMetric,     setLatestMetric]     = useState<BodyMetric | null>(null);
@@ -36,7 +49,7 @@ export default function DashboardPage() {
   const load = useCallback(async () => {
     try {
       const [activities, metrics] = await Promise.all([
-        activitiesService.getAll(20),
+        activitiesService.getAll(5),
         bodyMetricsService.getAll(1),
       ]);
       setRecentActivities(activities);
@@ -50,119 +63,101 @@ export default function DashboardPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const typeColor: Record<string, string> = {
-    strength: 'text-blue-400 bg-blue-400/10',
-    cardio:   'text-orange-400 bg-orange-400/10',
-    sport:    'text-green-400 bg-green-400/10',
-    mobility: 'text-purple-400 bg-purple-400/10',
-    custom:   'text-gray-400 bg-gray-400/10',
-  };
-
-  const typeIcon: Record<string, string> = {
-    strength: '💪', cardio: '🏃', sport: '⚽', mobility: '🧘', custom: '⚡',
-  };
-
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-lg px-4 pt-safe pb-4 flex items-center justify-between border-b border-white/5">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-primary/15 flex items-center justify-center">
+      <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-2xl px-4 pt-safe pb-4 flex items-center justify-between border-b border-white/[0.06]">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center">
             <Dumbbell className="w-4 h-4 text-primary" />
           </div>
           <div>
-            <h1 className="text-base font-bold text-white leading-tight">Performance OS</h1>
-            <p className="text-xs text-muted-foreground">{format(new Date(), 'EEEE, MMM d')}</p>
+            <h1 className="text-base font-bold text-white leading-tight tracking-tight">Performance OS</h1>
+            <p className="text-[11px] text-muted-foreground">{format(new Date(), 'EEEE, MMM d')}</p>
           </div>
         </div>
         <button
           onClick={signOut}
-          className="text-xs text-muted-foreground hover:text-white transition-colors px-3 py-1.5 rounded-lg border border-white/10"
+          className="text-xs text-muted-foreground hover:text-white transition-colors px-3 py-1.5 rounded-xl border border-white/[0.08] bg-white/[0.03]"
         >
           Sign out
         </button>
       </header>
 
-      <main className="flex-1 px-4 py-6 space-y-6 max-w-lg mx-auto w-full pb-nav">
+      <main className="flex-1 px-4 py-5 space-y-4 max-w-lg mx-auto w-full pb-nav">
 
         {/* Active workout draft banner */}
-        {draft && (
-          <button
-            onClick={() => { setResumingDraft(true); setShowSheet(true); }}
-            className="w-full flex items-center gap-3 rounded-2xl bg-primary/10 border border-primary/30 p-4 text-left active:scale-[0.98] transition-transform"
-          >
-            <span className="text-2xl">💪</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-primary">Continue Workout</p>
-              <p className="text-xs text-muted-foreground">
-                {draft.loggedSets.length} set{draft.loggedSets.length !== 1 ? 's' : ''} in progress — tap to resume
-              </p>
-            </div>
-            <span className="text-primary text-lg">›</span>
-          </button>
-        )}
+        <AnimatePresence>
+          {draft && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => { setResumingDraft(true); setShowSheet(true); }}
+              className="w-full flex items-center gap-3 rounded-2xl border border-primary/25 p-4 text-left glow-blue"
+              style={{ background: 'linear-gradient(135deg, hsl(217 91% 62% / 0.12) 0%, hsl(217 91% 62% / 0.05) 100%)' }}
+            >
+              <span className="text-2xl">💪</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-primary">Continue Workout</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {draft.loggedSets.length} set{draft.loggedSets.length !== 1 ? 's' : ''} in progress
+                </p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-primary/70 flex-shrink-0" />
+            </motion.button>
+          )}
+        </AnimatePresence>
 
         {/* Body metrics snapshot */}
         {latestMetric && (
-          <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
-            <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">
+          <motion.div
+            variants={fadeUp} initial="hidden" animate="show"
+            className="rounded-2xl glass p-4"
+          >
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-3">
               Latest Body Metrics · {format(new Date(latestMetric.date), 'MMM d')}
             </p>
             <div className="grid grid-cols-3 gap-3">
               {latestMetric.weight && (
                 <div className="text-center">
-                  <p className="text-xl font-bold text-white">{latestMetric.weight}</p>
-                  <p className="text-xs text-muted-foreground">kg</p>
+                  <p className="text-2xl font-bold text-white nums">{latestMetric.weight}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">kg</p>
                 </div>
               )}
               {latestMetric.body_fat && (
                 <div className="text-center">
-                  <p className="text-xl font-bold text-white">{latestMetric.body_fat}%</p>
-                  <p className="text-xs text-muted-foreground">body fat</p>
+                  <p className="text-2xl font-bold text-white nums">{latestMetric.body_fat}%</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">body fat</p>
                 </div>
               )}
               {latestMetric.waist && (
                 <div className="text-center">
-                  <p className="text-xl font-bold text-white">{latestMetric.waist}</p>
-                  <p className="text-xs text-muted-foreground">cm waist</p>
+                  <p className="text-2xl font-bold text-white nums">{latestMetric.waist}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">cm waist</p>
                 </div>
               )}
             </div>
-          </div>
+          </motion.div>
         )}
 
-        {/* Weekly burn card */}
-        {(() => {
-          const weightKg = latestMetric?.weight ?? 0;
-          if (!weightKg || recentActivities.length === 0) return null;
-          const cutoff = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
-          const thisWeek = recentActivities.filter(a => a.date >= cutoff);
-          if (thisWeek.length === 0) return null;
-          const weekKcal = thisWeek.reduce(
-            (sum, a) => sum + calcActivityCalories(a.type, a.duration ?? 30, weightKg).calories, 0,
-          );
-          return (
-            <div className="rounded-2xl bg-orange-500/10 border border-orange-500/20 p-4 flex items-center gap-3">
-              <Flame className="w-8 h-8 text-orange-400 flex-shrink-0" />
-              <div>
-                <p className="text-xl font-bold text-white">~{weekKcal.toLocaleString()} kcal</p>
-                <p className="text-xs text-muted-foreground">
-                  burned this week · {thisWeek.length} workout{thisWeek.length !== 1 ? 's' : ''}
-                </p>
-              </div>
-            </div>
-          );
-        })()}
+        {/* Recent workouts */}
+        <motion.div variants={fadeUp} initial="hidden" animate="show"
+          style={{ transition: 'none' } as React.CSSProperties}
+        >
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-3 px-0.5">
+            Recent Workouts
+          </p>
 
-        {/* Recent activity */}
-        <div>
-          <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">Recent Workouts</p>
           {loading ? (
             <div className="space-y-2">
-              {[1, 2, 3].map(i => <div key={i} className="h-16 rounded-xl bg-white/5 animate-pulse" />)}
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-[62px] rounded-2xl bg-white/[0.04] animate-pulse" />
+              ))}
             </div>
           ) : recentActivities.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center">
+            <div className="rounded-2xl border border-dashed border-white/10 p-10 text-center">
               <p className="text-3xl mb-2">🏋️</p>
               <p className="text-sm text-muted-foreground">No workouts yet</p>
               <p className="text-xs text-muted-foreground mt-1">
@@ -171,51 +166,64 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {recentActivities.slice(0, 5).map(a => {
-                const weightKg = latestMetric?.weight ?? 0;
-                const kcal = weightKg > 0 ? calcActivityCalories(a.type, a.duration ?? 30, weightKg).calories : 0;
+              {recentActivities.map((a, i) => {
+                const cfg = TYPE_CONFIG[a.type] ?? TYPE_CONFIG.custom;
                 return (
-                <button
-                  key={a.id}
-                  onClick={() => setSelectedId(a.id)}
-                  className="w-full rounded-xl bg-white/5 border border-white/10 p-3 flex items-center gap-3 text-left active:scale-[0.98] transition-transform"
-                >
-                  <span className="text-xl">{typeIcon[a.type] ?? '⚡'}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white capitalize truncate">{a.type}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {format(new Date(a.date + 'T12:00:00'), 'MMM d')} {a.duration ? `· ${a.duration}min` : ''}
-                    </p>
-                  </div>
-                  {kcal > 0 && (
-                    <span className="text-xs text-orange-400 font-medium flex-shrink-0 mr-1">~{kcal}</span>
-                  )}
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${typeColor[a.type]}`}>
-                    {a.type}
-                  </span>
-                </button>
+                  <motion.button
+                    key={a.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.06 + i * 0.05, type: 'spring', stiffness: 380, damping: 28 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setSelectedId(a.id)}
+                    className="w-full rounded-2xl glass p-3.5 flex items-center gap-3.5 text-left"
+                  >
+                    {/* Colored icon container */}
+                    <div className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 ${cfg.bg}`}>
+                      <span className="text-xl">{cfg.icon}</span>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-white capitalize">{a.type}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {format(new Date(a.date + 'T12:00:00'), 'EEE, MMM d')}
+                        {a.duration ? ` · ${a.duration}min` : ''}
+                      </p>
+                    </div>
+
+                    <ChevronRight className="w-4 h-4 text-white/20 flex-shrink-0" />
+                  </motion.button>
                 );
               })}
             </div>
           )}
-        </div>
+        </motion.div>
 
         {/* Phase indicator */}
-        <div className="rounded-2xl bg-primary/5 border border-primary/20 p-4 text-center">
+        <motion.div
+          variants={fadeUp} initial="hidden" animate="show"
+          className="rounded-2xl border border-primary/15 bg-primary/[0.04] p-4 text-center"
+        >
           <p className="text-xs text-primary font-medium mb-1">Phase 3 Active ⚡</p>
-          <p className="text-xs text-muted-foreground">History · Goals · Exercise Tracking</p>
-        </div>
+          <p className="text-[11px] text-muted-foreground">History · Goals · Exercise Tracking</p>
+        </motion.div>
       </main>
 
-      {/* Floating Action Button — sits above bottom nav */}
-      <button
+      {/* Floating Action Button */}
+      <motion.button
+        whileTap={{ scale: 0.92 }}
+        whileHover={{ scale: 1.05 }}
         onClick={() => { setResumingDraft(false); setShowSheet(true); }}
         style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' }}
-        className="fixed right-5 w-14 h-14 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/30 active:scale-95 transition-transform z-30"
+        className="fixed right-5 w-14 h-14 bg-primary rounded-full flex items-center justify-center z-30"
         aria-label="Log workout"
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ delay: 0.3, type: 'spring', stiffness: 400, damping: 22 }}
       >
-        <Plus className="w-6 h-6 text-black" />
-      </button>
+        <div className="absolute inset-0 rounded-full bg-primary opacity-40 animate-ping" style={{ animationDuration: '2.5s' }} />
+        <Plus className="w-6 h-6 text-black relative z-10" />
+      </motion.button>
 
       {/* Log Workout Sheet */}
       <LogWorkoutSheet

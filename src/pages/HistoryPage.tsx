@@ -3,8 +3,7 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import type { Activity } from '@/types';
 import { activitiesService } from '@/services/activities';
-import { bodyMetricsService } from '@/services/bodyMetrics';
-import { calcActivityCalories } from '@/engines/calorieEngine';
+import { motion } from 'framer-motion';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
 
 const FILTERS = [
@@ -14,21 +13,16 @@ const FILTERS = [
   { label: 'All', days: 0  },
 ] as const;
 
-const typeIcon: Record<string, string> = {
-  strength: '💪', cardio: '🏃', sport: '⚽', mobility: '🧘', custom: '⚡',
-};
-
-const typeColor: Record<string, string> = {
-  strength: 'text-blue-400 bg-blue-400/10',
-  cardio:   'text-orange-400 bg-orange-400/10',
-  sport:    'text-green-400 bg-green-400/10',
-  mobility: 'text-purple-400 bg-purple-400/10',
-  custom:   'text-gray-400 bg-gray-400/10',
+const TYPE_CONFIG: Record<string, { bg: string; icon: string }> = {
+  strength: { bg: 'bg-blue-500/10',   icon: '💪' },
+  cardio:   { bg: 'bg-orange-500/10', icon: '🏃' },
+  sport:    { bg: 'bg-green-500/10',  icon: '⚽' },
+  mobility: { bg: 'bg-purple-500/10', icon: '🧘' },
+  custom:   { bg: 'bg-slate-500/10',  icon: '⚡' },
 };
 
 export default function HistoryPage() {
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [weightKg,   setWeightKg]   = useState(0);
   const [loading, setLoading] = useState(true);
   const [filterDays, setFilterDays] = useState<7 | 30 | 90 | 0>(30);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -36,12 +30,8 @@ export default function HistoryPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [data, profile] = await Promise.all([
-        activitiesService.getAll(300),
-        bodyMetricsService.getLatestProfile(),
-      ]);
+      const data = await activitiesService.getAll(300);
       setActivities(data);
-      setWeightKg(profile.weight ?? 0);
     } catch {
       toast.error('Failed to load history');
     } finally {
@@ -67,88 +57,105 @@ export default function HistoryPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-lg px-4 pt-safe pb-4 border-b border-white/5">
-        <h1 className="text-lg font-bold text-white">History</h1>
-        <p className="text-xs text-muted-foreground">{filtered.length} workouts</p>
+      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-2xl px-4 pt-safe pb-4 border-b border-white/[0.06]">
+        <h1 className="text-xl font-bold text-white tracking-tight">History</h1>
+        <p className="text-[11px] text-muted-foreground mt-0.5">{filtered.length} workouts</p>
       </header>
 
       <main className="flex-1 px-4 py-4 space-y-4 max-w-lg mx-auto w-full pb-nav">
+
         {/* Filter tabs */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 p-1 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
           {FILTERS.map(f => (
-            <button
+            <motion.button
               key={f.days}
+              whileTap={{ scale: 0.95 }}
               onClick={() => setFilterDays(f.days)}
-              className={`px-4 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                filterDays === f.days
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-white/5 text-muted-foreground hover:bg-white/10'
-              }`}
+              className={`flex-1 py-1.5 rounded-xl text-xs font-semibold transition-colors relative`}
             >
-              {f.label}
-            </button>
+              {filterDays === f.days && (
+                <motion.div
+                  layoutId="filter-active"
+                  className="absolute inset-0 rounded-xl bg-primary"
+                  transition={{ type: 'spring', stiffness: 500, damping: 38 }}
+                />
+              )}
+              <span className={`relative z-10 ${filterDays === f.days ? 'text-white' : 'text-muted-foreground'}`}>
+                {f.label}
+              </span>
+            </motion.button>
           ))}
         </div>
 
         {loading ? (
           <div className="space-y-2">
             {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} className="h-16 rounded-xl bg-white/5 animate-pulse" />
+              <div key={i} className="h-[62px] rounded-2xl bg-white/[0.04] animate-pulse" />
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/10 p-10 text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl border border-dashed border-white/10 p-10 text-center"
+          >
             <p className="text-3xl mb-2">📋</p>
             <p className="text-sm text-muted-foreground">No workouts in this period</p>
-          </div>
+          </motion.div>
         ) : (
           <div className="space-y-6">
             {Object.entries(byMonth)
               .sort(([a], [b]) => b.localeCompare(a))
-              .map(([month, acts]) => (
-                <div key={month}>
-                  {(() => {
-                    const monthKcal = weightKg > 0
-                      ? acts.reduce((sum, a) => sum + calcActivityCalories(a.type, a.duration ?? 30, weightKg).calories, 0)
-                      : 0;
-                    return (
-                      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-                        {format(new Date(month + '-15'), 'MMMM yyyy')}
-                        <span className="ml-2 normal-case">· {acts.length}</span>
-                        {monthKcal > 0 && <span className="ml-2 normal-case text-orange-400">· ~{monthKcal.toLocaleString()} kcal</span>}
-                      </p>
-                    );
-                  })()}
+              .map(([month, acts], groupIdx) => (
+                <motion.div
+                  key={month}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: groupIdx * 0.05, type: 'spring', stiffness: 380, damping: 28 }}
+                >
+                  {/* Month header */}
+                  <div className="flex items-center gap-3 mb-2.5">
+                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground whitespace-nowrap">
+                      {format(new Date(month + '-15'), 'MMMM yyyy')}
+                    </p>
+                    <div className="flex-1 h-px bg-white/[0.06]" />
+                    <span className="text-[10px] text-muted-foreground">{acts.length}</span>
+                  </div>
+
                   <div className="space-y-2">
-                    {acts.map(a => {
-                      const kcal = weightKg > 0 ? calcActivityCalories(a.type, a.duration ?? 30, weightKg).calories : 0;
+                    {acts.map((a, i) => {
+                      const cfg = TYPE_CONFIG[a.type] ?? TYPE_CONFIG.custom;
                       return (
-                      <button
-                        key={a.id}
-                        onClick={() => setSelectedId(a.id)}
-                        className="w-full rounded-xl bg-white/5 border border-white/10 p-3 flex items-center gap-3 text-left active:scale-[0.98] transition-transform"
-                      >
-                        <span className="text-xl">{typeIcon[a.type] ?? '⚡'}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-white capitalize">{a.type}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {format(new Date(a.date + 'T12:00:00'), 'EEE, MMM d')}
-                            {a.duration ? ` · ${a.duration}min` : ''}
-                          </p>
-                        </div>
-                        {kcal > 0 && (
-                          <span className="text-xs text-orange-400 font-medium flex-shrink-0 mr-1">
-                            ~{kcal} kcal
-                          </span>
-                        )}
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${typeColor[a.type]}`}>
-                          {a.type}
-                        </span>
-                      </button>
+                        <motion.button
+                          key={a.id}
+                          initial={{ opacity: 0, x: -8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{
+                            delay: groupIdx * 0.05 + i * 0.04,
+                            type: 'spring', stiffness: 380, damping: 28,
+                          }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => setSelectedId(a.id)}
+                          className="w-full rounded-2xl glass p-3.5 flex items-center gap-3.5 text-left"
+                        >
+                          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 ${cfg.bg}`}>
+                            <span className="text-xl">{cfg.icon}</span>
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-white capitalize">{a.type}</p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                              {format(new Date(a.date + 'T12:00:00'), 'EEE, MMM d')}
+                              {a.duration ? ` · ${a.duration}min` : ''}
+                            </p>
+                          </div>
+
+                          <div className="w-1.5 h-1.5 rounded-full bg-white/20 flex-shrink-0" />
+                        </motion.button>
                       );
                     })}
                   </div>
-                </div>
+                </motion.div>
               ))}
           </div>
         )}
