@@ -84,3 +84,8 @@ option {
 /* ── Hide scrollbar but keep scroll ── */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ── Sonner toast: push below iPhone notch ── */
+[data-sonner-toaster][data-y-position="top"] {
+  top: max(16px, env(safe-area-inset-top, 16px)) !important;
+}

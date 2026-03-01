@@ -99,4 +99,26 @@ export const strengthSetsService = {
       sets: byDate[dates[0]].sort((a, b) => a.set_number - b.set_number),
     };
   },
+
+  // Get the all-time best set for an exercise (highest estimated 1RM)
+  getBestForExercise: async (exerciseId: string): Promise<{ weight: number; reps: number; estimated_1rm: number } | null> => {
+    const { data, error } = await supabase
+      .from('strength_sets')
+      .select('reps, weight')
+      .eq('exercise_id', exerciseId)
+      .not('weight', 'is', null)
+      .not('reps', 'is', null)
+      .order('weight', { ascending: false })
+      .limit(100);
+    if (error) throw error;
+    if (!data || data.length === 0) return null;
+    let best = { weight: 0, reps: 0, estimated_1rm: 0 };
+    for (const s of data) {
+      const w = Number(s.weight ?? 0);
+      const r = Number(s.reps ?? 0);
+      const oneRM = r > 0 ? w * (1 + r / 30) : w;
+      if (oneRM > best.estimated_1rm) best = { weight: w, reps: r, estimated_1rm: Math.round(oneRM * 10) / 10 };
+    }
+    return best.weight > 0 ? best : null;
+  },
 };

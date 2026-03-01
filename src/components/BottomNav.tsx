@@ -1,12 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Clock, Moon, BarChart2, Target } from 'lucide-react';
+import { Home, Clock, TrendingUp, Target } from 'lucide-react';
 
 const TABS = [
-  { path: '/',          icon: Home,      label: 'Home'    },
-  { path: '/history',   icon: Clock,     label: 'History' },
-  { path: '/sleep',     icon: Moon,      label: 'Sleep'   },
-  { path: '/analytics', icon: BarChart2, label: 'Stats'   },
-  { path: '/goals',     icon: Target,    label: 'Goals'   },
+  { path: '/',          icon: Home,       label: 'Home'     },
+  { path: '/history',   icon: Clock,      label: 'History'  },
+  { path: '/progress',  icon: TrendingUp, label: 'Progress' },
+  { path: '/goals',     icon: Target,     label: 'Goals'    },
 ] as const;
 
 export default function BottomNav() {

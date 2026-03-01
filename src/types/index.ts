@@ -165,3 +165,16 @@ export type CreateCardioMetrics = Omit<CardioMetrics, 'id' | 'created_at'>;
 export type CreateBodyMetric = Omit<BodyMetric, 'id' | 'user_id' | 'created_at'>;
 export type CreateGoal = Omit<Goal, 'id' | 'user_id' | 'created_at'>;
 export type CreateExercise = Omit<Exercise, 'id' | 'created_at'>;
+
+export interface GoalLog {
+  id: string;
+  user_id: string;
+  goal_id: string;
+  date: string;         // YYYY-MM-DD
+  value: number;        // the metric value (kg for lifts, km for distance, etc.)
+  reps?: number;        // for lift goals
+  notes?: string;
+  created_at: string;
+}
+
+export type CreateGoalLog = Omit<GoalLog, 'id' | 'user_id' | 'created_at'>;
