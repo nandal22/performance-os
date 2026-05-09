@@ -6,10 +6,14 @@ import {
   Dumbbell,
   ExternalLink,
   Footprints,
+  Image as ImageIcon,
+  Images,
   Loader2,
   RotateCcw,
   Save,
   Timer,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -18,11 +22,13 @@ import {
   getSuggestedPlanDay,
   progressionRules,
   type PlanExercise,
+  type PlanMedia,
   type PlanPhase,
   type PlanItem,
   workoutPlan,
 } from '@/data/workoutPlan';
 import { toISODate } from '@/lib/utils';
+import { useWorkoutReliability } from '@/hooks/useWorkoutReliability';
 import { activitiesService } from '@/services/activities';
 import { exercisesService } from '@/services/exercises';
 import { strengthSetsService } from '@/services/strengthSets';
@@ -31,6 +37,9 @@ import type { Exercise } from '@/types';
 const DRAFT_KEY = 'perf-os-guided-plan-draft';
 const PLAN_NAME = '5-Day Strength Workout Plan (Cut Phase)';
 const MEDIA_SOURCE_URL = 'https://github.com/yuhonas/free-exercise-db';
+const MEDIA_MODE_KEY = 'perf-os-workout-media-mode';
+
+type MediaMode = 'image' | 'motion';
 
 interface SetLog {
   reps: string;
@@ -63,6 +72,10 @@ interface PhaseTab {
   label: string;
   total: number;
   done: number;
+}
+
+function readMediaMode(): MediaMode {
+  return localStorage.getItem(MEDIA_MODE_KEY) === 'motion' ? 'motion' : 'image';
 }
 
 function normalizeName(value: string) {
@@ -125,10 +138,12 @@ function ChecklistItem({
   item,
   checked,
   onToggle,
+  mediaMode,
 }: {
   item: PlanItem;
   checked: boolean;
   onToggle: () => void;
+  mediaMode: MediaMode;
 }) {
   return (
     <motion.div
@@ -156,17 +171,7 @@ function ChecklistItem({
           </div>
         </div>
         {item.media && (
-          <div className="mt-3 aspect-[16/9] rounded-xl overflow-hidden bg-black/25 border border-white/[0.08]">
-            <img
-              src={item.media.url}
-              alt={`${item.name} demo`}
-              loading="lazy"
-              className="w-full h-full object-contain"
-              onError={event => {
-                event.currentTarget.style.display = 'none';
-              }}
-            />
-          </div>
+          <MediaArtwork media={item.media} alt={`${item.name} demo`} mediaMode={mediaMode} compact />
         )}
       </button>
       {item.media && (
@@ -185,7 +190,79 @@ function ChecklistItem({
   );
 }
 
-function MediaPanel({ exercise }: { exercise: PlanExercise }) {
+function MediaArtwork({
+  media,
+  alt,
+  mediaMode,
+  compact = false,
+}: {
+  media: PlanMedia;
+  alt: string;
+  mediaMode: MediaMode;
+  compact?: boolean;
+}) {
+  const frames = mediaMode === 'motion' && media.frames.length > 1 ? media.frames : [media.url];
+  const duration = `${Math.max(2, frames.length * 1.15)}s`;
+
+  return (
+    <div className={`${compact ? 'mt-3 rounded-xl' : 'rounded-2xl'} relative aspect-[16/9] overflow-hidden bg-black/25 border border-white/[0.08]`}>
+      {frames.length > 1 ? (
+        <div className="absolute inset-0">
+          {frames.map((frame, index) => (
+            <img
+              key={frame}
+              src={frame}
+              alt={index === 0 ? alt : ''}
+              aria-hidden={index > 0}
+              loading="lazy"
+              className="motion-media-frame w-full h-full object-contain bg-black/25"
+              style={{
+                animationDelay: `${index * 1.15}s`,
+                animationDuration: duration,
+              }}
+              onError={event => {
+                event.currentTarget.style.display = 'none';
+              }}
+            />
+          ))}
+        </div>
+      ) : (
+        <img
+          src={media.url}
+          alt={alt}
+          loading="lazy"
+          className="w-full h-full object-contain bg-black/25"
+          onError={event => {
+            event.currentTarget.style.display = 'none';
+          }}
+        />
+      )}
+      {frames.length > 1 && (
+        <div className="absolute left-2 bottom-2 rounded-xl bg-black/65 backdrop-blur px-2 py-1 text-[10px] text-white/75 flex items-center gap-1">
+          <Images className="w-3 h-3" />
+          Motion
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MediaSourceLink({ media, label }: { media: PlanMedia; label: string }) {
+  return (
+    <a
+      href={media.sourceUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="absolute right-5 bottom-5 rounded-xl bg-black/65 backdrop-blur px-2 py-1 text-[10px] text-white/75 flex items-center gap-1"
+      aria-label={`${label} media source`}
+    >
+      <ExternalLink className="w-3 h-3" />
+      {media.source}
+    </a>
+  );
+}
+
+function MediaPanel({ exercise, mediaMode }: { exercise: PlanExercise; mediaMode: MediaMode }) {
   if (!exercise.media) {
     return (
       <div className="aspect-[16/9] rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
@@ -195,25 +272,9 @@ function MediaPanel({ exercise }: { exercise: PlanExercise }) {
   }
 
   return (
-    <div className="relative aspect-[16/9] rounded-2xl overflow-hidden bg-white/[0.04] border border-white/[0.08]">
-      <img
-        src={exercise.media.url}
-        alt={exercise.name}
-        loading="lazy"
-        className="w-full h-full object-contain bg-black/25"
-        onError={event => {
-          event.currentTarget.style.display = 'none';
-        }}
-      />
-      <a
-        href={exercise.media.sourceUrl}
-        target="_blank"
-        rel="noreferrer"
-        className="absolute right-2 bottom-2 rounded-xl bg-black/65 backdrop-blur px-2 py-1 text-[10px] text-white/75 flex items-center gap-1"
-      >
-        <ExternalLink className="w-3 h-3" />
-        {exercise.media.source}
-      </a>
+    <div className="relative">
+      <MediaArtwork media={exercise.media} alt={exercise.name} mediaMode={mediaMode} />
+      <MediaSourceLink media={exercise.media} label={exercise.name} />
     </div>
   );
 }
@@ -224,11 +285,13 @@ export default function WorkoutPlanPage() {
   const [date, setDate] = useState(toISODate(new Date()));
   const [progress, setProgress] = useState<GuidedProgress>(() => readProgress(suggestedDay.day, toISODate(new Date())) ?? buildProgress(suggestedDay.day, toISODate(new Date())));
   const [saving, setSaving] = useState(false);
+  const [mediaMode, setMediaMode] = useState<MediaMode>(readMediaMode);
 
   const planDay = useMemo(
     () => workoutPlan.find(item => item.day === selectedDay) ?? workoutPlan[0],
     [selectedDay],
   );
+  const reliability = useWorkoutReliability(true, `${date}-day-${planDay.day}`);
 
   useEffect(() => {
     setProgress(readProgress(selectedDay, date) ?? buildProgress(selectedDay, date));
@@ -237,6 +300,10 @@ export default function WorkoutPlanPage() {
   useEffect(() => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...progress, savedAt: Date.now() }));
   }, [progress]);
+
+  useEffect(() => {
+    localStorage.setItem(MEDIA_MODE_KEY, mediaMode);
+  }, [mediaMode]);
 
   const loggedRows = useMemo<LoggedSetRow[]>(() => {
     return planDay.workout.flatMap(exercise =>
@@ -502,6 +569,47 @@ export default function WorkoutPlanPage() {
           />
         </div>
 
+        <div className="grid grid-cols-[1fr_auto] gap-2">
+          <div className="flex gap-1 p-1 rounded-2xl bg-white/[0.035] border border-white/[0.07]">
+            {([
+              { id: 'image' as const, label: 'Image', icon: ImageIcon },
+              { id: 'motion' as const, label: 'Motion', icon: Images },
+            ]).map(option => {
+              const active = mediaMode === option.id;
+              const Icon = option.icon;
+              return (
+                <button
+                  key={option.id}
+                  onClick={() => setMediaMode(option.id)}
+                  className="relative flex-1 rounded-xl py-2 text-[11px] font-semibold"
+                >
+                  {active && (
+                    <motion.div
+                      layoutId="media-mode"
+                      className="absolute inset-0 rounded-xl bg-primary"
+                      transition={{ type: 'spring', stiffness: 500, damping: 38 }}
+                    />
+                  )}
+                  <span className={`relative z-10 flex items-center justify-center gap-1.5 ${active ? 'text-white' : 'text-muted-foreground'}`}>
+                    <Icon className="w-3.5 h-3.5" />
+                    {option.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="min-w-[108px] rounded-2xl bg-white/[0.04] border border-white/[0.08] px-3 py-2 flex items-center justify-center gap-2">
+            {reliability.online ? <Wifi className="w-4 h-4 text-emerald-300" /> : <WifiOff className="w-4 h-4 text-orange-300" />}
+            <div>
+              <p className="text-[10px] text-muted-foreground leading-none">Workout</p>
+              <p className="text-xs font-semibold text-white mt-0.5">
+                {reliability.otherTabs > 0 ? `${reliability.otherTabs + 1} tabs` : reliability.wakeLock === 'active' ? 'Awake' : 'Ready'}
+              </p>
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-3 gap-2">
           <div className="rounded-2xl bg-white/[0.04] border border-white/[0.08] p-3">
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Calories</p>
@@ -556,6 +664,7 @@ export default function WorkoutPlanPage() {
                   item={item}
                   checked={progress.warmup.includes(item.id)}
                   onToggle={() => toggleListItem('warmup', item.id)}
+                  mediaMode={mediaMode}
                 />
               ))}
             </motion.section>
@@ -571,7 +680,7 @@ export default function WorkoutPlanPage() {
             >
               {planDay.workout.map(exercise => (
                 <div key={exercise.id} className="rounded-2xl glass p-3.5 space-y-3">
-                  <MediaPanel exercise={exercise} />
+                  <MediaPanel exercise={exercise} mediaMode={mediaMode} />
 
                   <div>
                     <div className="flex items-start justify-between gap-3">
@@ -653,6 +762,7 @@ export default function WorkoutPlanPage() {
                   item={item}
                   checked={progress.stretch.includes(item.id)}
                   onToggle={() => toggleListItem('stretch', item.id)}
+                  mediaMode={mediaMode}
                 />
               ))}
             </motion.section>
@@ -672,6 +782,7 @@ export default function WorkoutPlanPage() {
                   item={item}
                   checked={progress.recovery.includes(item.id)}
                   onToggle={() => toggleListItem('recovery', item.id)}
+                  mediaMode={mediaMode}
                 />
               ))}
             </motion.section>

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import {
   Beef,
+  Calculator,
   Check,
   Droplet,
   Flame,
@@ -18,6 +19,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { cutPhaseTargets } from '@/data/workoutPlan';
+import { estimateMeal, MEAL_ESTIMATE_EXAMPLES, type MealEstimate } from '@/engines/nutritionEstimator';
 import { toISODate } from '@/lib/utils';
 import { calorieLogsService, type CalorieLog, type MealType } from '@/services/calorieLogs';
 import { dailyStepsService } from '@/services/dailySteps';
@@ -193,6 +195,8 @@ export default function CaloriesPage() {
   const [quickFoods, setQuickFoods] = useState<QuickFood[]>(readQuickFoods);
   const [editingQuick, setEditingQuick] = useState(false);
   const [quickDrafts, setQuickDrafts] = useState<QuickFoodDraft[]>(() => readQuickFoods().map(toQuickDraft));
+  const [estimateInput, setEstimateInput] = useState('');
+  const [mealEstimate, setMealEstimate] = useState<MealEstimate | null>(null);
 
   const summary = useMemo(() => (
     logs.reduce(
@@ -249,6 +253,33 @@ export default function CaloriesPage() {
     setMeal(input.meal);
     refresh();
     toast.success(`${input.name} logged`);
+  };
+
+  const runMealEstimate = (value = estimateInput) => {
+    const next = estimateMeal(value);
+    setMealEstimate(next);
+    if (next.items.length === 0) {
+      toast.error('No foods matched yet');
+    }
+  };
+
+  const logMealEstimate = () => {
+    if (!mealEstimate || mealEstimate.items.length === 0 || mealEstimate.totals.calories <= 0) {
+      return toast.error('Estimate a meal first');
+    }
+
+    const name = mealEstimate.items.map(item => item.label).join(' + ');
+    calorieLogsService.create({
+      date,
+      meal,
+      name: name.length > 90 ? `${name.slice(0, 87)}...` : name,
+      calories: mealEstimate.totals.calories,
+      protein: mealEstimate.totals.protein,
+      carbs: mealEstimate.totals.carbs,
+      fat: mealEstimate.totals.fat,
+    });
+    refresh();
+    toast.success('Meal estimate logged');
   };
 
   const saveSteps = () => {
@@ -383,6 +414,114 @@ export default function CaloriesPage() {
                 {target.toLocaleString()}
               </button>
             ))}
+          </div>
+        </section>
+
+        <section className="rounded-2xl glass p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Calculator className="w-4 h-4 text-sky-300" />
+              <p className="text-sm font-semibold text-white">Meal estimate</p>
+            </div>
+            {mealEstimate && mealEstimate.items.length > 0 && (
+              <span className="rounded-xl px-2.5 py-1 text-[11px] font-semibold bg-sky-400/10 text-sky-200 nums">
+                {mealEstimate.totals.calories} kcal
+              </span>
+            )}
+          </div>
+
+          <textarea
+            value={estimateInput}
+            onChange={e => setEstimateInput(e.target.value)}
+            rows={2}
+            placeholder="3 chapati and 1 bowl paneer curry"
+            className="w-full bg-white/[0.05] border border-white/[0.1] rounded-xl px-3 py-3 text-sm text-white placeholder:text-white/25 resize-none focus:outline-none focus:border-primary/50"
+          />
+
+          <div className="grid grid-cols-4 gap-1.5">
+            {MEALS.map(item => (
+              <button
+                key={`estimate-${item.value}`}
+                onClick={() => setMeal(item.value)}
+                className={`rounded-xl py-2 text-[11px] font-semibold transition-colors ${
+                  meal === item.value ? 'bg-primary text-white' : 'bg-white/[0.05] text-muted-foreground'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+            {MEAL_ESTIMATE_EXAMPLES.map(example => (
+              <button
+                key={example}
+                onClick={() => {
+                  setEstimateInput(example);
+                  runMealEstimate(example);
+                }}
+                className="flex-shrink-0 rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2 text-[11px] font-semibold text-muted-foreground active:scale-[0.98] transition-transform"
+              >
+                {example}
+              </button>
+            ))}
+          </div>
+
+          {mealEstimate && (
+            <div className="space-y-2">
+              {mealEstimate.items.map(item => (
+                <div key={`${item.id}-${item.label}`} className="rounded-xl bg-white/[0.035] border border-white/[0.07] p-2.5 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">{item.label}</p>
+                    <p className="text-[10px] text-muted-foreground">Base: {item.food.serving}</p>
+                  </div>
+                  <p className="text-xs font-semibold text-white nums whitespace-nowrap">
+                    {item.calories} kcal
+                  </p>
+                </div>
+              ))}
+
+              {mealEstimate.unmatched.length > 0 && (
+                <div className="rounded-xl bg-orange-400/10 border border-orange-400/20 px-3 py-2">
+                  <p className="text-[11px] text-orange-200">
+                    Not matched: {mealEstimate.unmatched.join(', ')}
+                  </p>
+                </div>
+              )}
+
+              {mealEstimate.items.length > 0 && (
+                <div className="grid grid-cols-4 gap-2">
+                  {([
+                    ['Kcal', mealEstimate.totals.calories],
+                    ['P', mealEstimate.totals.protein],
+                    ['C', mealEstimate.totals.carbs],
+                    ['F', mealEstimate.totals.fat],
+                  ] as const).map(([label, value]) => (
+                    <div key={label} className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-2 text-center">
+                      <p className="text-[10px] text-muted-foreground">{label}</p>
+                      <p className="text-sm font-bold text-white nums">{Math.round(value)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <button
+              onClick={() => runMealEstimate()}
+              className="h-11 rounded-xl bg-sky-400/15 border border-sky-400/25 text-sky-100 text-sm font-semibold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+            >
+              <Calculator className="w-4 h-4" />
+              Estimate
+            </button>
+            <button
+              onClick={logMealEstimate}
+              className="h-11 px-4 rounded-xl bg-primary text-white text-sm font-semibold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+            >
+              <Plus className="w-4 h-4" />
+              Log
+            </button>
           </div>
         </section>
 

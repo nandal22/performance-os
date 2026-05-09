@@ -5,6 +5,7 @@ export type PlanPhase = 'warmup' | 'workout' | 'stretch' | 'recovery';
 export interface PlanMedia {
   kind: 'image' | 'gif' | 'video';
   url: string;
+  frames: string[];
   source: string;
   sourceUrl: string;
 }
@@ -46,12 +47,32 @@ const EX_DB_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/m
 const EX_DB_SOURCE = 'https://github.com/yuhonas/free-exercise-db';
 
 function exDbImage(id: string, image = '0.jpg'): PlanMedia {
+  const base = `${EX_DB_BASE}/${id}`;
   return {
     kind: 'image',
-    url: `${EX_DB_BASE}/${id}/${image}`,
+    url: `${base}/${image}`,
+    frames: [`${base}/0.jpg`, `${base}/1.jpg`],
     source: 'Free Exercise DB',
     sourceUrl: `${EX_DB_SOURCE}/tree/main/exercises/${id}`,
   };
+}
+
+export function getWorkoutMediaUrls() {
+  const urls = new Set<string>();
+  const addMedia = (media?: PlanMedia) => {
+    if (!media) return;
+    urls.add(media.url);
+    media.frames.forEach(frame => urls.add(frame));
+  };
+
+  for (const day of workoutPlan) {
+    day.warmup.forEach(item => addMedia(item.media));
+    day.workout.forEach(item => addMedia(item.media));
+    day.stretch.forEach(item => addMedia(item.media));
+    day.recovery?.forEach(item => addMedia(item.media));
+  }
+
+  return Array.from(urls);
 }
 
 const MEDIA = {
