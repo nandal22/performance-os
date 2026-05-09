@@ -16,7 +16,7 @@ const QUALITY = [
 function calcDuration(bed: string, wake: string): number {
   const [bh, bm] = bed.split(':').map(Number);
   const [wh, wm] = wake.split(':').map(Number);
-  let bedMins  = bh * 60 + bm;
+  const bedMins  = bh * 60 + bm;
   let wakeMins = wh * 60 + wm;
   if (wakeMins <= bedMins) wakeMins += 24 * 60; // past midnight
   return Math.round((wakeMins - bedMins) / 6) / 10; // 1 decimal hour

@@ -3,6 +3,8 @@ import { Toaster } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import LoginPage        from '@/pages/LoginPage';
 import DashboardPage    from '@/pages/DashboardPage';
+import WorkoutPlanPage  from '@/pages/WorkoutPlanPage';
+import CaloriesPage     from '@/pages/CaloriesPage';
 import HistoryPage      from '@/pages/HistoryPage';
 import ProgressPage     from '@/pages/ProgressPage';
 import GoalsPage        from '@/pages/GoalsPage';
@@ -37,6 +39,8 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedLayout />}>
           <Route path="/"          element={<DashboardPage />} />
+          <Route path="/plan"     element={<WorkoutPlanPage />} />
+          <Route path="/calories" element={<CaloriesPage />}    />
           <Route path="/history"  element={<HistoryPage />}     />
           <Route path="/progress" element={<ProgressPage />}   />
           <Route path="/goals"    element={<GoalsPage />}       />

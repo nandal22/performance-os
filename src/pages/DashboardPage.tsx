@@ -1,14 +1,17 @@
 import { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { signOut } from '@/hooks/useAuth';
 import { activitiesService } from '@/services/activities';
 import { bodyMetricsService } from '@/services/bodyMetrics';
+import { calorieLogsService } from '@/services/calorieLogs';
 import type { Activity, BodyMetric } from '@/types';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { Dumbbell, Plus, ChevronRight } from 'lucide-react';
+import { Dumbbell, Plus, ChevronRight, Flame, CalendarCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import LogWorkoutSheet from '@/components/LogWorkoutSheet';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
+import { cutPhaseTargets, getSuggestedPlanDay } from '@/data/workoutPlan';
 
 const DRAFT_KEY = 'perf-os-draft';
 
@@ -45,6 +48,8 @@ export default function DashboardPage() {
   const [resumingDraft,    setResumingDraft]    = useState(false);
   const [selectedId,       setSelectedId]       = useState<string | null>(null);
   const [draft,            setDraft]            = useState<DraftMeta | null>(readDraft);
+  const todayPlan = getSuggestedPlanDay();
+  const calorieSummary = calorieLogsService.getSummary();
 
   const load = useCallback(async () => {
     try {
@@ -109,6 +114,35 @@ export default function DashboardPage() {
             </motion.button>
           )}
         </AnimatePresence>
+
+        {/* Cut phase guide */}
+        <div className="grid grid-cols-2 gap-2">
+          <Link
+            to="/plan"
+            className="rounded-2xl border border-primary/20 bg-primary/[0.07] p-3.5 active:scale-[0.98] transition-transform"
+          >
+            <div className="w-9 h-9 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center mb-3">
+              <CalendarCheck className="w-4 h-4 text-primary" />
+            </div>
+            <p className="text-sm font-semibold text-white">Today</p>
+            <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
+              Day {todayPlan.day} · {todayPlan.title}
+            </p>
+          </Link>
+
+          <Link
+            to="/calories"
+            className="rounded-2xl border border-orange-400/20 bg-orange-400/[0.07] p-3.5 active:scale-[0.98] transition-transform"
+          >
+            <div className="w-9 h-9 rounded-2xl bg-orange-400/10 border border-orange-400/25 flex items-center justify-center mb-3">
+              <Flame className="w-4 h-4 text-orange-300" />
+            </div>
+            <p className="text-sm font-semibold text-white nums">{Math.round(calorieSummary.calories)} kcal</p>
+            <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
+              Target {cutPhaseTargets.caloriesMin}-{cutPhaseTargets.caloriesMax}
+            </p>
+          </Link>
+        </div>
 
         {/* Body metrics snapshot */}
         {latestMetric && (

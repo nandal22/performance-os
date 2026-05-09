@@ -244,7 +244,11 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
     const newTracked = exercisesService.toggleTracked(id);
     setTrackedIds(prev => {
       const next = new Set(prev);
-      newTracked ? next.add(id) : next.delete(id);
+      if (newTracked) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
       return next;
     });
     toast.success(newTracked ? 'Exercise tracked ⭐' : 'Removed from tracked');
@@ -723,7 +727,11 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
         onTrackToggle={(id, tracked) => {
           setTrackedIds(prev => {
             const next = new Set(prev);
-            tracked ? next.add(id) : next.delete(id);
+            if (tracked) {
+              next.add(id);
+            } else {
+              next.delete(id);
+            }
             return next;
           });
         }}

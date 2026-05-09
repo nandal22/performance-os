@@ -82,7 +82,11 @@ export const exercisesService = {
   toggleTracked: (id: string): boolean => {
     const ids = new Set(exercisesService.getTrackedIds());
     const wasTracked = ids.has(id);
-    wasTracked ? ids.delete(id) : ids.add(id);
+    if (wasTracked) {
+      ids.delete(id);
+    } else {
+      ids.add(id);
+    }
     localStorage.setItem('perf-os-tracked', JSON.stringify([...ids]));
     return !wasTracked;
   },

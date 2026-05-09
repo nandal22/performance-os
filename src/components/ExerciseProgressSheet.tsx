@@ -22,13 +22,16 @@ interface SessionData {
 
 export default function ExerciseProgressSheet({ exercise, onClose, onTrackToggle }: Props) {
   const [sessions, setSessions] = useState<SessionData[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [tracked, setTracked] = useState(false);
+  const [loadedExerciseId, setLoadedExerciseId] = useState<string | null>(null);
+  const [trackedByExercise, setTrackedByExercise] = useState<Record<string, boolean>>({});
+  const tracked = exercise
+    ? trackedByExercise[exercise.id] ?? exercisesService.isTracked(exercise.id)
+    : false;
+  const loading = Boolean(exercise && loadedExerciseId !== exercise.id);
 
   useEffect(() => {
     if (!exercise) return;
-    setTracked(exercisesService.isTracked(exercise.id));
-    setLoading(true);
+    let cancelled = false;
     strengthSetsService.getByExercise(exercise.id, 300)
       .then(sets => {
         const byDate: Record<string, { weights: number[]; reps: number[] }> = {};
@@ -54,17 +57,26 @@ export default function ExerciseProgressSheet({ exercise, onClose, onTrackToggle
             };
           })
           .sort((a, b) => a.date.localeCompare(b.date));
-        setSessions(result);
+        if (!cancelled) {
+          setSessions(result);
+          setLoadedExerciseId(exercise.id);
+        }
       })
-      .catch(() => toast.error('Failed to load progress'))
-      .finally(() => setLoading(false));
-  }, [exercise?.id]);
+      .catch(() => {
+        if (!cancelled) {
+          setSessions([]);
+          setLoadedExerciseId(exercise.id);
+          toast.error('Failed to load progress');
+        }
+      });
+    return () => { cancelled = true; };
+  }, [exercise]);
 
   if (!exercise) return null;
 
   const handleToggleTracked = () => {
     const newTracked = exercisesService.toggleTracked(exercise.id);
-    setTracked(newTracked);
+    setTrackedByExercise(prev => ({ ...prev, [exercise.id]: newTracked }));
     onTrackToggle?.(exercise.id, newTracked);
     toast.success(newTracked ? 'Exercise tracked ⭐' : 'Removed from tracked');
   };

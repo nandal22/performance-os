@@ -1,0 +1,710 @@
+import type { Equipment, ExerciseCategory } from '@/types';
+
+export type PlanPhase = 'warmup' | 'workout' | 'stretch' | 'recovery';
+
+export interface PlanMedia {
+  kind: 'image' | 'gif' | 'video';
+  url: string;
+  source: string;
+  sourceUrl: string;
+}
+
+export interface PlanItem {
+  id: string;
+  name: string;
+  target: string;
+  cue: string;
+  media?: PlanMedia;
+}
+
+export interface PlanExercise extends PlanItem {
+  sets: number;
+  repRange: string;
+  logUnit?: 'reps' | 'seconds';
+  dbName: string;
+  aliases: string[];
+  category: ExerciseCategory;
+  primaryMuscle: string;
+  secondaryMuscles: string[];
+  equipment: Equipment;
+}
+
+export interface WorkoutPlanDay {
+  day: number;
+  shortLabel: string;
+  title: string;
+  focus: string;
+  duration: string;
+  accent: string;
+  warmup: PlanItem[];
+  workout: PlanExercise[];
+  stretch: PlanItem[];
+  recovery?: PlanItem[];
+}
+
+const EX_DB_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises';
+const EX_DB_SOURCE = 'https://github.com/yuhonas/free-exercise-db';
+
+function exDbImage(id: string, image = '0.jpg'): PlanMedia {
+  return {
+    kind: 'image',
+    url: `${EX_DB_BASE}/${id}/${image}`,
+    source: 'Free Exercise DB',
+    sourceUrl: `${EX_DB_SOURCE}/tree/main/exercises/${id}`,
+  };
+}
+
+const COMMON_WARMUP_UPPER: PlanItem[] = [
+  {
+    id: 'arm-circles',
+    name: 'Arm circles',
+    target: '15 forward, 15 backward',
+    cue: 'Keep ribs down and move from the shoulder, not the lower back.',
+  },
+  {
+    id: 'band-pull-aparts',
+    name: 'Band pull-aparts',
+    target: '2 x 15',
+    cue: 'Pull the band to upper chest height and keep shoulder blades moving smoothly.',
+  },
+  {
+    id: 'scapular-pushups',
+    name: 'Scapular push-ups',
+    target: '2 x 10',
+    cue: 'Lock elbows and only move the shoulder blades around the rib cage.',
+  },
+];
+
+const COMMON_WARMUP_LOWER: PlanItem[] = [
+  {
+    id: 'leg-swings',
+    name: 'Leg swings',
+    target: '15 each leg',
+    cue: 'Hold a rack, keep the torso tall, and swing with control.',
+  },
+  {
+    id: 'hip-circles',
+    name: 'Hip circles',
+    target: '10 each direction',
+    cue: 'Make slow circles and keep the standing foot rooted.',
+  },
+  {
+    id: 'bodyweight-squats',
+    name: 'Bodyweight squats',
+    target: '2 x 10',
+    cue: 'Sit between the hips, knees track over toes, pause at the bottom.',
+  },
+  {
+    id: 'glute-bridges',
+    name: 'Glute bridges',
+    target: '2 x 12',
+    cue: 'Tuck pelvis slightly and finish by squeezing glutes, not arching your back.',
+  },
+];
+
+const UPPER_STRETCHES: PlanItem[] = [
+  { id: 'chest-stretch', name: 'Chest stretch', target: '30 sec each side', cue: 'Place forearm on a wall and rotate away gently.' },
+  { id: 'lat-stretch', name: 'Lat stretch', target: '30 sec', cue: 'Hinge back with one hand anchored and breathe into the side ribs.' },
+  { id: 'triceps-stretch', name: 'Triceps stretch', target: '30 sec', cue: 'Keep ribs stacked and avoid cranking the elbow.' },
+  { id: 'rear-delt-stretch', name: 'Rear delt stretch', target: '30 sec', cue: 'Pull the arm across the body without shrugging.' },
+];
+
+const LOWER_STRETCHES: PlanItem[] = [
+  { id: 'hamstring-stretch', name: 'Hamstrings', target: '30 sec each leg', cue: 'Soft knee, hinge from hips, stop before the lower back rounds.' },
+  { id: 'quad-stretch', name: 'Quads', target: '30 sec each leg', cue: 'Knees close together, glute lightly squeezed.' },
+  { id: 'hip-flexor-stretch', name: 'Hip flexors', target: '30 sec', cue: 'Posterior tilt first, then shift forward just enough to feel the front hip.' },
+  { id: 'calf-stretch', name: 'Calves', target: '30 sec', cue: 'Heel down, knee straight first, then slightly bent for the soleus.' },
+];
+
+function strengthExercise(input: PlanExercise): PlanExercise {
+  return input;
+}
+
+export const workoutPlan: WorkoutPlanDay[] = [
+  {
+    day: 1,
+    shortLabel: 'Upper S',
+    title: 'Upper Strength',
+    focus: 'Heavy presses, pulls, and upper-back support work.',
+    duration: '55-70 min',
+    accent: 'from-sky-500/20 to-cyan-400/10',
+    warmup: [
+      ...COMMON_WARMUP_UPPER,
+      {
+        id: 'shoulder-dislocations',
+        name: 'Shoulder dislocations',
+        target: '2 x 12 with band',
+        cue: 'Use a wide grip and only move through a pain-free range.',
+      },
+      {
+        id: 'bench-ramp',
+        name: 'Bench warm-up sets',
+        target: '1-2 light sets',
+        cue: 'Build the groove before loading your first working set.',
+      },
+    ],
+    workout: [
+      strengthExercise({
+        id: 'bench-press',
+        name: 'Bench Press',
+        dbName: 'Bench Press',
+        aliases: ['Bench Press', 'Barbell Bench Press - Medium Grip'],
+        target: '4 x 4-6',
+        sets: 4,
+        repRange: '4-6',
+        cue: 'Shoulder blades tucked, feet planted, bar touches mid-chest.',
+        category: 'push',
+        primaryMuscle: 'Chest',
+        secondaryMuscles: ['Triceps', 'Front Delt'],
+        equipment: 'barbell',
+        media: exDbImage('Barbell_Bench_Press_-_Medium_Grip'),
+      }),
+      strengthExercise({
+        id: 'pullups-lat-pulldown',
+        name: 'Pull-ups / Lat Pulldown',
+        dbName: 'Pull-up',
+        aliases: ['Pull-up', 'Pull-ups', 'Lat Pulldown', 'Wide-Grip Lat Pulldown'],
+        target: '4 x 5-7',
+        sets: 4,
+        repRange: '5-7',
+        cue: 'Lead with elbows and stop each rep before shoulders roll forward.',
+        category: 'pull',
+        primaryMuscle: 'Back',
+        secondaryMuscles: ['Biceps'],
+        equipment: 'bodyweight',
+        media: exDbImage('Pullups'),
+      }),
+      strengthExercise({
+        id: 'overhead-press',
+        name: 'Overhead Press',
+        dbName: 'Overhead Press',
+        aliases: ['Overhead Press', 'Barbell Shoulder Press', 'Standing Military Press'],
+        target: '3 x 5-6',
+        sets: 3,
+        repRange: '5-6',
+        cue: 'Brace hard, press close to the face, and finish with biceps near ears.',
+        category: 'push',
+        primaryMuscle: 'Shoulders',
+        secondaryMuscles: ['Triceps'],
+        equipment: 'barbell',
+        media: exDbImage('Standing_Military_Press'),
+      }),
+      strengthExercise({
+        id: 'barbell-row',
+        name: 'Barbell Row',
+        dbName: 'Barbell Row',
+        aliases: ['Barbell Row', 'Bent Over Barbell Row'],
+        target: '3 x 5-6',
+        sets: 3,
+        repRange: '5-6',
+        cue: 'Hinge, keep the bar close, and pull toward lower ribs.',
+        category: 'pull',
+        primaryMuscle: 'Back',
+        secondaryMuscles: ['Biceps', 'Rear Delt'],
+        equipment: 'barbell',
+        media: exDbImage('Bent_Over_Barbell_Row'),
+      }),
+      strengthExercise({
+        id: 'incline-db-press',
+        name: 'Incline DB Press',
+        dbName: 'Incline DB Press',
+        aliases: ['Incline DB Press', 'Dumbbell Incline Bench Press', 'Incline Bench Press'],
+        target: '2 x 6-8',
+        sets: 2,
+        repRange: '6-8',
+        cue: 'Slight arch, elbows about 45 degrees, press dumbbells up and in.',
+        category: 'push',
+        primaryMuscle: 'Chest',
+        secondaryMuscles: ['Triceps', 'Front Delt'],
+        equipment: 'dumbbell',
+        media: exDbImage('Incline_Dumbbell_Press'),
+      }),
+      strengthExercise({
+        id: 'face-pulls',
+        name: 'Face Pulls',
+        dbName: 'Face Pull',
+        aliases: ['Face Pull', 'Face Pulls'],
+        target: '2 x 12-15',
+        sets: 2,
+        repRange: '12-15',
+        cue: 'Pull rope toward eye level and rotate thumbs behind you.',
+        category: 'pull',
+        primaryMuscle: 'Rear Delt',
+        secondaryMuscles: ['Rotator Cuff'],
+        equipment: 'cable',
+        media: exDbImage('Face_Pull'),
+      }),
+    ],
+    stretch: UPPER_STRETCHES,
+  },
+  {
+    day: 2,
+    shortLabel: 'Lower S',
+    title: 'Lower Strength',
+    focus: 'Squat pattern, hip hinge, legs, calves, and core.',
+    duration: '55-70 min',
+    accent: 'from-emerald-500/20 to-lime-400/10',
+    warmup: [
+      ...COMMON_WARMUP_LOWER,
+      {
+        id: 'walking-lunges',
+        name: 'Walking lunges',
+        target: '10 steps',
+        cue: 'Take controlled steps and keep the front foot fully planted.',
+      },
+    ],
+    workout: [
+      strengthExercise({
+        id: 'squat',
+        name: 'Squat',
+        dbName: 'Squat',
+        aliases: ['Squat', 'Barbell Full Squat'],
+        target: '4 x 4-6',
+        sets: 4,
+        repRange: '4-6',
+        cue: 'Brace before descent, stay tight at the bottom, drive through mid-foot.',
+        category: 'legs',
+        primaryMuscle: 'Quads',
+        secondaryMuscles: ['Glutes', 'Hamstrings'],
+        equipment: 'barbell',
+        media: exDbImage('Barbell_Full_Squat'),
+      }),
+      strengthExercise({
+        id: 'romanian-deadlift',
+        name: 'Romanian Deadlift',
+        dbName: 'Romanian Deadlift',
+        aliases: ['Romanian Deadlift'],
+        target: '3 x 5-6',
+        sets: 3,
+        repRange: '5-6',
+        cue: 'Push hips back, keep lats tight, stop when hamstrings limit the range.',
+        category: 'legs',
+        primaryMuscle: 'Hamstrings',
+        secondaryMuscles: ['Glutes', 'Back'],
+        equipment: 'barbell',
+        media: exDbImage('Romanian_Deadlift'),
+      }),
+      strengthExercise({
+        id: 'leg-press',
+        name: 'Leg Press',
+        dbName: 'Leg Press',
+        aliases: ['Leg Press'],
+        target: '3 x 6-8',
+        sets: 3,
+        repRange: '6-8',
+        cue: 'Control the depth and avoid hips curling off the pad.',
+        category: 'legs',
+        primaryMuscle: 'Quads',
+        secondaryMuscles: ['Glutes'],
+        equipment: 'machine',
+        media: exDbImage('Leg_Press'),
+      }),
+      strengthExercise({
+        id: 'hamstring-curl',
+        name: 'Hamstring Curl',
+        dbName: 'Hamstring Curl',
+        aliases: ['Hamstring Curl', 'Leg Curl', 'Lying Leg Curls'],
+        target: '2 x 8-10',
+        sets: 2,
+        repRange: '8-10',
+        cue: 'Curl with control and keep hips down through the whole rep.',
+        category: 'legs',
+        primaryMuscle: 'Hamstrings',
+        secondaryMuscles: [],
+        equipment: 'machine',
+        media: exDbImage('Lying_Leg_Curls'),
+      }),
+      strengthExercise({
+        id: 'standing-calf-raises',
+        name: 'Standing Calf Raises',
+        dbName: 'Calf Raise',
+        aliases: ['Calf Raise', 'Standing Calf Raises'],
+        target: '3 x 10-12',
+        sets: 3,
+        repRange: '10-12',
+        cue: 'Pause at the top and get a full stretch at the bottom.',
+        category: 'legs',
+        primaryMuscle: 'Calves',
+        secondaryMuscles: [],
+        equipment: 'machine',
+        media: exDbImage('Standing_Calf_Raises'),
+      }),
+      strengthExercise({
+        id: 'plank',
+        name: 'Plank',
+        dbName: 'Plank',
+        aliases: ['Plank'],
+        target: '3 sets',
+        sets: 3,
+        repRange: '30-60 sec',
+        logUnit: 'seconds',
+        cue: 'Ribs down, glutes lightly squeezed, breathe behind the brace.',
+        category: 'core',
+        primaryMuscle: 'Abs',
+        secondaryMuscles: ['Lower Back'],
+        equipment: 'bodyweight',
+        media: exDbImage('Plank'),
+      }),
+    ],
+    stretch: LOWER_STRETCHES,
+  },
+  {
+    day: 3,
+    shortLabel: 'Recover',
+    title: 'Rest / Active Recovery',
+    focus: 'Steps, light mobility, and recovery quality.',
+    duration: '20-45 min',
+    accent: 'from-teal-500/15 to-slate-400/10',
+    warmup: [],
+    workout: [],
+    stretch: [],
+    recovery: [
+      { id: 'steps-8-10k', name: 'Steps', target: '8-10k', cue: 'Keep this easy. The goal is blood flow, not fatigue.' },
+      { id: 'light-mobility', name: 'Light mobility', target: '10 min', cue: 'Move through hips, t-spine, shoulders, and ankles without strain.' },
+      { id: 'sleep-check', name: 'Sleep target', target: '7-8 hrs', cue: 'Protect tonight. Recovery keeps strength from dropping during the cut.' },
+    ],
+  },
+  {
+    day: 4,
+    shortLabel: 'Upper V',
+    title: 'Upper Volume',
+    focus: 'Moderate reps for chest, back, shoulders, and arms.',
+    duration: '45-60 min',
+    accent: 'from-indigo-500/20 to-sky-400/10',
+    warmup: [
+      { id: 'arm-circles-volume', name: 'Arm circles', target: '15 each direction', cue: 'Small to large circles, pain-free range.' },
+      { id: 'band-pull-aparts-volume', name: 'Band pull-aparts', target: '2 x 15', cue: 'Pull to chest height and keep traps relaxed.' },
+      { id: 'light-lateral-raises', name: 'Light lateral raises', target: '2 x 12', cue: 'Prime delts with a light, smooth tempo.' },
+      { id: 'pushups-volume', name: 'Push-ups', target: '10 reps', cue: 'Easy set only. Leave plenty in the tank.' },
+    ],
+    workout: [
+      strengthExercise({
+        id: 'incline-bench-press',
+        name: 'Incline Bench Press',
+        dbName: 'Incline Bench Press',
+        aliases: ['Incline Bench Press', 'Barbell Incline Bench Press - Medium Grip'],
+        target: '3 x 6-8',
+        sets: 3,
+        repRange: '6-8',
+        cue: 'Touch upper chest, keep wrists stacked, press slightly back.',
+        category: 'push',
+        primaryMuscle: 'Chest',
+        secondaryMuscles: ['Triceps', 'Front Delt'],
+        equipment: 'barbell',
+        media: exDbImage('Barbell_Incline_Bench_Press_-_Medium_Grip'),
+      }),
+      strengthExercise({
+        id: 'seated-cable-row',
+        name: 'Seated Cable Row',
+        dbName: 'Seated Cable Row',
+        aliases: ['Seated Cable Row', 'Seated Cable Rows'],
+        target: '3 x 8-10',
+        sets: 3,
+        repRange: '8-10',
+        cue: 'Pull elbows back, pause, and let shoulder blades glide forward under control.',
+        category: 'pull',
+        primaryMuscle: 'Back',
+        secondaryMuscles: ['Biceps', 'Rear Delt'],
+        equipment: 'cable',
+        media: exDbImage('Seated_Cable_Rows'),
+      }),
+      strengthExercise({
+        id: 'db-shoulder-press',
+        name: 'DB Shoulder Press',
+        dbName: 'DB Shoulder Press',
+        aliases: ['DB Shoulder Press', 'Dumbbell Shoulder Press'],
+        target: '3 x 8-10',
+        sets: 3,
+        repRange: '8-10',
+        cue: 'Keep forearms vertical and avoid turning it into an incline press.',
+        category: 'push',
+        primaryMuscle: 'Shoulders',
+        secondaryMuscles: ['Triceps'],
+        equipment: 'dumbbell',
+        media: exDbImage('Dumbbell_Shoulder_Press'),
+      }),
+      strengthExercise({
+        id: 'lateral-raises',
+        name: 'Lateral Raises',
+        dbName: 'Lateral Raise',
+        aliases: ['Lateral Raise', 'Lateral Raises', 'Side Lateral Raise'],
+        target: '3 x 12-15',
+        sets: 3,
+        repRange: '12-15',
+        cue: 'Lift to shoulder height, lead with elbows, keep traps quiet.',
+        category: 'push',
+        primaryMuscle: 'Shoulders',
+        secondaryMuscles: [],
+        equipment: 'dumbbell',
+        media: exDbImage('Side_Lateral_Raise'),
+      }),
+      strengthExercise({
+        id: 'triceps-pushdown',
+        name: 'Triceps Pushdown',
+        dbName: 'Tricep Pushdown',
+        aliases: ['Tricep Pushdown', 'Triceps Pushdown'],
+        target: '2 x 10-12',
+        sets: 2,
+        repRange: '10-12',
+        cue: 'Pin elbows, extend fully, and control the return.',
+        category: 'push',
+        primaryMuscle: 'Triceps',
+        secondaryMuscles: [],
+        equipment: 'cable',
+        media: exDbImage('Triceps_Pushdown'),
+      }),
+      strengthExercise({
+        id: 'biceps-curl',
+        name: 'Biceps Curl',
+        dbName: 'Barbell Curl',
+        aliases: ['Biceps Curl', 'Barbell Curl', 'Dumbbell Biceps Curl'],
+        target: '2 x 10-12',
+        sets: 2,
+        repRange: '10-12',
+        cue: 'Keep shoulders still and squeeze hard without swinging.',
+        category: 'pull',
+        primaryMuscle: 'Biceps',
+        secondaryMuscles: ['Forearms'],
+        equipment: 'barbell',
+        media: exDbImage('Barbell_Curl'),
+      }),
+    ],
+    stretch: [
+      { id: 'chest-stretch-volume', name: 'Chest', target: '30 sec', cue: 'Gentle wall stretch, breathe slowly.' },
+      { id: 'shoulders-stretch-volume', name: 'Shoulders', target: '30 sec', cue: 'Cross-body stretch without shrugging.' },
+      { id: 'biceps-stretch-volume', name: 'Biceps', target: '30 sec', cue: 'Palm on wall, rotate away until light tension appears.' },
+      { id: 'upper-traps-stretch', name: 'Upper traps', target: '30 sec', cue: 'Drop one ear toward shoulder, keep the opposite shoulder down.' },
+    ],
+  },
+  {
+    day: 5,
+    shortLabel: 'Lower V',
+    title: 'Lower Volume',
+    focus: 'Leg volume with glute, hamstring, quad, and calf work.',
+    duration: '45-60 min',
+    accent: 'from-amber-500/15 to-rose-400/10',
+    warmup: [
+      { id: 'leg-swings-volume', name: 'Leg swings', target: '15 each leg', cue: 'Controlled range, no snapping through the hip.' },
+      { id: 'hip-openers', name: 'Hip openers', target: '10 each side', cue: 'Open the hip and reset the pelvis between reps.' },
+      { id: 'glute-bridges-volume', name: 'Glute bridges', target: '2 x 12', cue: 'Squeeze at the top without arching.' },
+      { id: 'bodyweight-squats-volume', name: 'Bodyweight squats', target: '2 x 10', cue: 'Smooth depth, knees tracking cleanly.' },
+    ],
+    workout: [
+      strengthExercise({
+        id: 'front-hack-squat',
+        name: 'Front Squat / Hack Squat',
+        dbName: 'Front Squat',
+        aliases: ['Front Squat', 'Barbell Front Squat', 'Hack Squat'],
+        target: '3 x 6-8',
+        sets: 3,
+        repRange: '6-8',
+        cue: 'Stay tall and let knees travel forward while heels stay planted.',
+        category: 'legs',
+        primaryMuscle: 'Quads',
+        secondaryMuscles: ['Glutes'],
+        equipment: 'barbell',
+        media: exDbImage('Barbell_Front_Squat'),
+      }),
+      strengthExercise({
+        id: 'hip-thrust',
+        name: 'Hip Thrust',
+        dbName: 'Hip Thrust',
+        aliases: ['Hip Thrust', 'Barbell Hip Thrust'],
+        target: '3 x 8-10',
+        sets: 3,
+        repRange: '8-10',
+        cue: 'Tuck ribs, pause at lockout, and keep shins near vertical.',
+        category: 'legs',
+        primaryMuscle: 'Glutes',
+        secondaryMuscles: ['Hamstrings'],
+        equipment: 'barbell',
+        media: exDbImage('Barbell_Hip_Thrust'),
+      }),
+      strengthExercise({
+        id: 'leg-curl',
+        name: 'Leg Curl',
+        dbName: 'Leg Curl',
+        aliases: ['Leg Curl', 'Lying Leg Curls', 'Hamstring Curl'],
+        target: '3 x 10-12',
+        sets: 3,
+        repRange: '10-12',
+        cue: 'Keep the rep smooth and own the squeeze.',
+        category: 'legs',
+        primaryMuscle: 'Hamstrings',
+        secondaryMuscles: [],
+        equipment: 'machine',
+        media: exDbImage('Lying_Leg_Curls'),
+      }),
+      strengthExercise({
+        id: 'leg-extension',
+        name: 'Leg Extension',
+        dbName: 'Leg Extension',
+        aliases: ['Leg Extension', 'Leg Extensions'],
+        target: '2 x 10-12',
+        sets: 2,
+        repRange: '10-12',
+        cue: 'Lift under control, pause at the top, do not bounce the bottom.',
+        category: 'legs',
+        primaryMuscle: 'Quads',
+        secondaryMuscles: [],
+        equipment: 'machine',
+        media: exDbImage('Leg_Extensions'),
+      }),
+      strengthExercise({
+        id: 'calf-raises-volume',
+        name: 'Calf Raises',
+        dbName: 'Calf Raise',
+        aliases: ['Calf Raise', 'Standing Calf Raises'],
+        target: '3 x 12-15',
+        sets: 3,
+        repRange: '12-15',
+        cue: 'Full stretch, full squeeze, no bouncing.',
+        category: 'legs',
+        primaryMuscle: 'Calves',
+        secondaryMuscles: [],
+        equipment: 'machine',
+        media: exDbImage('Standing_Calf_Raises'),
+      }),
+    ],
+    stretch: [
+      { id: 'hamstrings-stretch-volume', name: 'Hamstrings', target: '30 sec', cue: 'Hinge forward with a long spine.' },
+      { id: 'glutes-stretch', name: 'Glutes', target: '30 sec', cue: 'Figure-four position, breathe into the hip.' },
+      { id: 'hip-flexors-stretch-volume', name: 'Hip flexors', target: '30 sec', cue: 'Tuck pelvis first, then glide forward.' },
+      { id: 'calves-stretch-volume', name: 'Calves', target: '30 sec', cue: 'Heel down and breathe slowly.' },
+    ],
+  },
+  {
+    day: 6,
+    shortLabel: 'Delts+Arms',
+    title: 'Shoulders + Arms',
+    focus: 'Shoulder strength plus delt, biceps, and triceps volume.',
+    duration: '40-55 min',
+    accent: 'from-fuchsia-500/15 to-pink-400/10',
+    warmup: [
+      { id: 'arm-circles-arms', name: 'Arm circles', target: '20 total', cue: 'Easy range first, then gradually open up.' },
+      { id: 'band-pull-aparts-arms', name: 'Band pull-aparts', target: '2 x 15', cue: 'Move shoulder blades cleanly and keep ribs down.' },
+      { id: 'light-curls-pushdowns', name: 'Light curls + pushdowns', target: '15 each', cue: 'Prime elbows before the heavier arm work.' },
+    ],
+    workout: [
+      strengthExercise({
+        id: 'overhead-press-arms',
+        name: 'Overhead Press',
+        dbName: 'Overhead Press',
+        aliases: ['Overhead Press', 'Barbell Shoulder Press', 'Standing Military Press'],
+        target: '3 x 5-6',
+        sets: 3,
+        repRange: '5-6',
+        cue: 'Brace, press in a straight path, and avoid leaning back.',
+        category: 'push',
+        primaryMuscle: 'Shoulders',
+        secondaryMuscles: ['Triceps'],
+        equipment: 'barbell',
+        media: exDbImage('Standing_Military_Press'),
+      }),
+      strengthExercise({
+        id: 'lateral-raises-arms',
+        name: 'Lateral Raises',
+        dbName: 'Lateral Raise',
+        aliases: ['Lateral Raise', 'Lateral Raises', 'Side Lateral Raise'],
+        target: '4 x 12-15',
+        sets: 4,
+        repRange: '12-15',
+        cue: 'Smooth reps, slight lean forward, stop before traps take over.',
+        category: 'push',
+        primaryMuscle: 'Shoulders',
+        secondaryMuscles: [],
+        equipment: 'dumbbell',
+        media: exDbImage('Side_Lateral_Raise'),
+      }),
+      strengthExercise({
+        id: 'rear-delt-fly',
+        name: 'Rear Delt Fly',
+        dbName: 'Rear Delt Fly',
+        aliases: ['Rear Delt Fly', 'Bent Over Dumbbell Rear Delt Raise'],
+        target: '3 x 12-15',
+        sets: 3,
+        repRange: '12-15',
+        cue: 'Reach wide, lead with elbows, and avoid pulling with traps.',
+        category: 'pull',
+        primaryMuscle: 'Rear Delt',
+        secondaryMuscles: ['Upper Back'],
+        equipment: 'dumbbell',
+        media: exDbImage('Bent_Over_Dumbbell_Rear_Delt_Raise_With_Head_On_Bench'),
+      }),
+      strengthExercise({
+        id: 'barbell-curl',
+        name: 'Barbell Curl',
+        dbName: 'Barbell Curl',
+        aliases: ['Barbell Curl'],
+        target: '3 x 6-8',
+        sets: 3,
+        repRange: '6-8',
+        cue: 'Elbows stay near ribs, no hip swing, hard squeeze at the top.',
+        category: 'pull',
+        primaryMuscle: 'Biceps',
+        secondaryMuscles: ['Forearms'],
+        equipment: 'barbell',
+        media: exDbImage('Barbell_Curl'),
+      }),
+      strengthExercise({
+        id: 'skull-crushers',
+        name: 'Skull Crushers',
+        dbName: 'Skull Crushers',
+        aliases: ['Skull Crushers', 'Lying Triceps Press', 'Lying Close-Grip Barbell Triceps Extension Behind The Head'],
+        target: '3 x 6-8',
+        sets: 3,
+        repRange: '6-8',
+        cue: 'Elbows point up and slightly back; lower behind head, not into the forehead.',
+        category: 'push',
+        primaryMuscle: 'Triceps',
+        secondaryMuscles: [],
+        equipment: 'barbell',
+        media: exDbImage('Lying_Close-Grip_Barbell_Triceps_Extension_Behind_The_Head'),
+      }),
+    ],
+    stretch: [
+      { id: 'triceps-stretch-arms', name: 'Triceps', target: '30 sec', cue: 'Reach overhead and keep ribs stacked.' },
+      { id: 'biceps-stretch-arms', name: 'Biceps', target: '30 sec', cue: 'Palm on wall, rotate away gently.' },
+      { id: 'shoulders-stretch-arms', name: 'Shoulders', target: '30 sec', cue: 'Cross-body stretch, shoulder down.' },
+      { id: 'neck-stretch', name: 'Neck', target: '20 sec each side', cue: 'Gentle pressure only. No forcing.' },
+    ],
+  },
+  {
+    day: 7,
+    shortLabel: 'Rest',
+    title: 'Rest',
+    focus: 'Full rest, steps if desired, sleep, and meal consistency.',
+    duration: 'All day',
+    accent: 'from-slate-500/15 to-zinc-400/10',
+    warmup: [],
+    workout: [],
+    stretch: [],
+    recovery: [
+      { id: 'protein-150', name: 'Protein', target: '150 g', cue: 'Hit protein early so dinner is easy.' },
+      { id: 'calories-1700-1800', name: 'Calories', target: '1700-1800 kcal', cue: 'Stay in range instead of chasing an exact number.' },
+      { id: 'sleep-7-8', name: 'Sleep', target: '7-8 hrs', cue: 'Treat sleep as part of the plan, not a bonus.' },
+    ],
+  },
+];
+
+export const progressionRules = [
+  'Stay 1-2 reps short of failure on big lifts.',
+  'Maintain or slightly increase weight weekly.',
+  'If strength drops, increase carbs slightly.',
+  'If recovery is poor, reduce 1-2 sets.',
+];
+
+export const cutPhaseTargets = {
+  caloriesMin: 1700,
+  caloriesMax: 1800,
+  caloriesTarget: 1750,
+  protein: 150,
+  steps: '8-10k',
+  sleep: '7-8 hrs',
+};
+
+export function getSuggestedPlanDay(date = new Date()): WorkoutPlanDay {
+  const day = date.getDay();
+  const planDay = day === 0 ? 7 : day;
+  return workoutPlan.find(item => item.day === planDay) ?? workoutPlan[0];
+}

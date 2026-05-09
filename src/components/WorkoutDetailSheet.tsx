@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, Trash2 } from 'lucide-react';
+import { X, Trash2, CheckCircle2, CalendarCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import type { ActivityWithSets, StrengthSetWithExercise } from '@/types';
@@ -9,6 +9,20 @@ interface Props {
   activityId: string | null;
   onClose: () => void;
   onDeleted: () => void;
+}
+
+interface GuidedMetrics {
+  guided_plan?: boolean;
+  plan?: {
+    day?: number;
+    title?: string;
+    focus?: string;
+  };
+  completed?: {
+    warmup?: string[];
+    stretch?: string[];
+    strengthSets?: unknown[];
+  };
 }
 
 const typeIcon: Record<string, string> = {
@@ -49,6 +63,9 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
   }
 
   const totalVolume = sets.reduce((sum, s) => sum + (s.volume || 0), 0);
+  const guided = activity?.structured_metrics?.guided_plan
+    ? activity.structured_metrics as GuidedMetrics
+    : null;
 
   const handleDelete = async () => {
     if (!confirmDelete) { setConfirmDelete(true); return; }
@@ -141,6 +158,38 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
                         <p className="text-xs text-muted-foreground">kcal</p>
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* Guided plan metadata */}
+              {guided && (
+                <div className="rounded-xl bg-primary/[0.06] border border-primary/20 p-4">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="w-9 h-9 rounded-2xl bg-primary/10 border border-primary/25 flex items-center justify-center flex-shrink-0">
+                      <CalendarCheck className="w-4 h-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-white">
+                        Day {guided.plan?.day ?? '-'} · {guided.plan?.title ?? 'Guided workout'}
+                      </p>
+                      {guided.plan?.focus && (
+                        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{guided.plan.focus}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { label: 'Warm-up', value: guided.completed?.warmup?.length ?? 0 },
+                      { label: 'Sets', value: guided.completed?.strengthSets?.length ?? sets.length },
+                      { label: 'Stretch', value: guided.completed?.stretch?.length ?? 0 },
+                    ].map(item => (
+                      <div key={item.label} className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-2 text-center">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
+                        <p className="text-base font-bold text-white nums">{item.value}</p>
+                        <p className="text-[10px] text-muted-foreground">{item.label}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
