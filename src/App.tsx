@@ -1,4 +1,6 @@
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { Toaster } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import LoginPage        from '@/pages/LoginPage';
@@ -32,6 +34,17 @@ function ProtectedLayout() {
   );
 }
 
+function VercelTelemetry() {
+  const location = useLocation();
+
+  return (
+    <>
+      <Analytics />
+      <SpeedInsights route={location.pathname} />
+    </>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -49,6 +62,7 @@ export default function App() {
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <VercelTelemetry />
       <Toaster position="top-center" richColors />
     </BrowserRouter>
   );

@@ -54,24 +54,56 @@ function exDbImage(id: string, image = '0.jpg'): PlanMedia {
   };
 }
 
+const MEDIA = {
+  armCircles: exDbImage('Arm_Circles'),
+  bandPullApart: exDbImage('Band_Pull_Apart'),
+  scapularPushups: exDbImage('Pushups'),
+  shoulderDislocations: exDbImage('Round_The_World_Shoulder_Stretch'),
+  benchRamp: exDbImage('Barbell_Bench_Press_-_Medium_Grip'),
+  legSwings: exDbImage('Single_Leg_Butt_Kick'),
+  hipCircles: exDbImage('Standing_Hip_Circles'),
+  bodyweightSquat: exDbImage('Bodyweight_Squat'),
+  gluteBridge: exDbImage('Single_Leg_Glute_Bridge'),
+  walkingLunge: exDbImage('Bodyweight_Walking_Lunge'),
+  hipOpeners: exDbImage('Groiners'),
+  lateralRaise: exDbImage('Side_Lateral_Raise'),
+  pushups: exDbImage('Pushups'),
+  lightCurls: exDbImage('Barbell_Curl'),
+  lightPushdowns: exDbImage('Triceps_Pushdown'),
+  chestStretch: exDbImage('Chest_And_Front_Of_Shoulder_Stretch'),
+  latStretch: exDbImage('One_Handed_Hang'),
+  tricepsStretch: exDbImage('Triceps_Stretch'),
+  shoulderStretch: exDbImage('Shoulder_Stretch'),
+  hamstringStretch: exDbImage('Standing_Hamstring_and_Calf_Stretch'),
+  quadStretch: exDbImage('All_Fours_Quad_Stretch'),
+  hipFlexorStretch: exDbImage('Standing_Hip_Flexors'),
+  calfStretch: exDbImage('Standing_Gastrocnemius_Calf_Stretch'),
+  gluteStretch: exDbImage('Ankle_On_The_Knee'),
+  bicepsStretch: exDbImage('Standing_Biceps_Stretch'),
+  neckStretch: exDbImage('Side_Neck_Stretch'),
+};
+
 const COMMON_WARMUP_UPPER: PlanItem[] = [
   {
     id: 'arm-circles',
     name: 'Arm circles',
     target: '15 forward, 15 backward',
     cue: 'Keep ribs down and move from the shoulder, not the lower back.',
+    media: MEDIA.armCircles,
   },
   {
     id: 'band-pull-aparts',
     name: 'Band pull-aparts',
     target: '2 x 15',
     cue: 'Pull the band to upper chest height and keep shoulder blades moving smoothly.',
+    media: MEDIA.bandPullApart,
   },
   {
     id: 'scapular-pushups',
     name: 'Scapular push-ups',
     target: '2 x 10',
     cue: 'Lock elbows and only move the shoulder blades around the rib cage.',
+    media: MEDIA.scapularPushups,
   },
 ];
 
@@ -81,39 +113,43 @@ const COMMON_WARMUP_LOWER: PlanItem[] = [
     name: 'Leg swings',
     target: '15 each leg',
     cue: 'Hold a rack, keep the torso tall, and swing with control.',
+    media: MEDIA.legSwings,
   },
   {
     id: 'hip-circles',
     name: 'Hip circles',
     target: '10 each direction',
     cue: 'Make slow circles and keep the standing foot rooted.',
+    media: MEDIA.hipCircles,
   },
   {
     id: 'bodyweight-squats',
     name: 'Bodyweight squats',
     target: '2 x 10',
     cue: 'Sit between the hips, knees track over toes, pause at the bottom.',
+    media: MEDIA.bodyweightSquat,
   },
   {
     id: 'glute-bridges',
     name: 'Glute bridges',
     target: '2 x 12',
     cue: 'Tuck pelvis slightly and finish by squeezing glutes, not arching your back.',
+    media: MEDIA.gluteBridge,
   },
 ];
 
 const UPPER_STRETCHES: PlanItem[] = [
-  { id: 'chest-stretch', name: 'Chest stretch', target: '30 sec each side', cue: 'Place forearm on a wall and rotate away gently.' },
-  { id: 'lat-stretch', name: 'Lat stretch', target: '30 sec', cue: 'Hinge back with one hand anchored and breathe into the side ribs.' },
-  { id: 'triceps-stretch', name: 'Triceps stretch', target: '30 sec', cue: 'Keep ribs stacked and avoid cranking the elbow.' },
-  { id: 'rear-delt-stretch', name: 'Rear delt stretch', target: '30 sec', cue: 'Pull the arm across the body without shrugging.' },
+  { id: 'chest-stretch', name: 'Chest stretch', target: '30 sec each side', cue: 'Place forearm on a wall and rotate away gently.', media: MEDIA.chestStretch },
+  { id: 'lat-stretch', name: 'Lat stretch', target: '30 sec', cue: 'Hinge back with one hand anchored and breathe into the side ribs.', media: MEDIA.latStretch },
+  { id: 'triceps-stretch', name: 'Triceps stretch', target: '30 sec', cue: 'Keep ribs stacked and avoid cranking the elbow.', media: MEDIA.tricepsStretch },
+  { id: 'rear-delt-stretch', name: 'Rear delt stretch', target: '30 sec', cue: 'Pull the arm across the body without shrugging.', media: MEDIA.shoulderStretch },
 ];
 
 const LOWER_STRETCHES: PlanItem[] = [
-  { id: 'hamstring-stretch', name: 'Hamstrings', target: '30 sec each leg', cue: 'Soft knee, hinge from hips, stop before the lower back rounds.' },
-  { id: 'quad-stretch', name: 'Quads', target: '30 sec each leg', cue: 'Knees close together, glute lightly squeezed.' },
-  { id: 'hip-flexor-stretch', name: 'Hip flexors', target: '30 sec', cue: 'Posterior tilt first, then shift forward just enough to feel the front hip.' },
-  { id: 'calf-stretch', name: 'Calves', target: '30 sec', cue: 'Heel down, knee straight first, then slightly bent for the soleus.' },
+  { id: 'hamstring-stretch', name: 'Hamstrings', target: '30 sec each leg', cue: 'Soft knee, hinge from hips, stop before the lower back rounds.', media: MEDIA.hamstringStretch },
+  { id: 'quad-stretch', name: 'Quads', target: '30 sec each leg', cue: 'Knees close together, glute lightly squeezed.', media: MEDIA.quadStretch },
+  { id: 'hip-flexor-stretch', name: 'Hip flexors', target: '30 sec', cue: 'Posterior tilt first, then shift forward just enough to feel the front hip.', media: MEDIA.hipFlexorStretch },
+  { id: 'calf-stretch', name: 'Calves', target: '30 sec', cue: 'Heel down, knee straight first, then slightly bent for the soleus.', media: MEDIA.calfStretch },
 ];
 
 function strengthExercise(input: PlanExercise): PlanExercise {
@@ -135,12 +171,14 @@ export const workoutPlan: WorkoutPlanDay[] = [
         name: 'Shoulder dislocations',
         target: '2 x 12 with band',
         cue: 'Use a wide grip and only move through a pain-free range.',
+        media: MEDIA.shoulderDislocations,
       },
       {
         id: 'bench-ramp',
         name: 'Bench warm-up sets',
         target: '1-2 light sets',
         cue: 'Build the groove before loading your first working set.',
+        media: MEDIA.benchRamp,
       },
     ],
     workout: [
@@ -251,6 +289,7 @@ export const workoutPlan: WorkoutPlanDay[] = [
         name: 'Walking lunges',
         target: '10 steps',
         cue: 'Take controlled steps and keep the front foot fully planted.',
+        media: MEDIA.walkingLunge,
       },
     ],
     workout: [
@@ -372,10 +411,10 @@ export const workoutPlan: WorkoutPlanDay[] = [
     duration: '45-60 min',
     accent: 'from-indigo-500/20 to-sky-400/10',
     warmup: [
-      { id: 'arm-circles-volume', name: 'Arm circles', target: '15 each direction', cue: 'Small to large circles, pain-free range.' },
-      { id: 'band-pull-aparts-volume', name: 'Band pull-aparts', target: '2 x 15', cue: 'Pull to chest height and keep traps relaxed.' },
-      { id: 'light-lateral-raises', name: 'Light lateral raises', target: '2 x 12', cue: 'Prime delts with a light, smooth tempo.' },
-      { id: 'pushups-volume', name: 'Push-ups', target: '10 reps', cue: 'Easy set only. Leave plenty in the tank.' },
+      { id: 'arm-circles-volume', name: 'Arm circles', target: '15 each direction', cue: 'Small to large circles, pain-free range.', media: MEDIA.armCircles },
+      { id: 'band-pull-aparts-volume', name: 'Band pull-aparts', target: '2 x 15', cue: 'Pull to chest height and keep traps relaxed.', media: MEDIA.bandPullApart },
+      { id: 'light-lateral-raises', name: 'Light lateral raises', target: '2 x 12', cue: 'Prime delts with a light, smooth tempo.', media: MEDIA.lateralRaise },
+      { id: 'pushups-volume', name: 'Push-ups', target: '10 reps', cue: 'Easy set only. Leave plenty in the tank.', media: MEDIA.pushups },
     ],
     workout: [
       strengthExercise({
@@ -470,10 +509,10 @@ export const workoutPlan: WorkoutPlanDay[] = [
       }),
     ],
     stretch: [
-      { id: 'chest-stretch-volume', name: 'Chest', target: '30 sec', cue: 'Gentle wall stretch, breathe slowly.' },
-      { id: 'shoulders-stretch-volume', name: 'Shoulders', target: '30 sec', cue: 'Cross-body stretch without shrugging.' },
-      { id: 'biceps-stretch-volume', name: 'Biceps', target: '30 sec', cue: 'Palm on wall, rotate away until light tension appears.' },
-      { id: 'upper-traps-stretch', name: 'Upper traps', target: '30 sec', cue: 'Drop one ear toward shoulder, keep the opposite shoulder down.' },
+      { id: 'chest-stretch-volume', name: 'Chest', target: '30 sec', cue: 'Gentle wall stretch, breathe slowly.', media: MEDIA.chestStretch },
+      { id: 'shoulders-stretch-volume', name: 'Shoulders', target: '30 sec', cue: 'Cross-body stretch without shrugging.', media: MEDIA.shoulderStretch },
+      { id: 'biceps-stretch-volume', name: 'Biceps', target: '30 sec', cue: 'Palm on wall, rotate away until light tension appears.', media: MEDIA.bicepsStretch },
+      { id: 'upper-traps-stretch', name: 'Upper traps', target: '30 sec', cue: 'Drop one ear toward shoulder, keep the opposite shoulder down.', media: MEDIA.neckStretch },
     ],
   },
   {
@@ -484,10 +523,10 @@ export const workoutPlan: WorkoutPlanDay[] = [
     duration: '45-60 min',
     accent: 'from-amber-500/15 to-rose-400/10',
     warmup: [
-      { id: 'leg-swings-volume', name: 'Leg swings', target: '15 each leg', cue: 'Controlled range, no snapping through the hip.' },
-      { id: 'hip-openers', name: 'Hip openers', target: '10 each side', cue: 'Open the hip and reset the pelvis between reps.' },
-      { id: 'glute-bridges-volume', name: 'Glute bridges', target: '2 x 12', cue: 'Squeeze at the top without arching.' },
-      { id: 'bodyweight-squats-volume', name: 'Bodyweight squats', target: '2 x 10', cue: 'Smooth depth, knees tracking cleanly.' },
+      { id: 'leg-swings-volume', name: 'Leg swings', target: '15 each leg', cue: 'Controlled range, no snapping through the hip.', media: MEDIA.legSwings },
+      { id: 'hip-openers', name: 'Hip openers', target: '10 each side', cue: 'Open the hip and reset the pelvis between reps.', media: MEDIA.hipOpeners },
+      { id: 'glute-bridges-volume', name: 'Glute bridges', target: '2 x 12', cue: 'Squeeze at the top without arching.', media: MEDIA.gluteBridge },
+      { id: 'bodyweight-squats-volume', name: 'Bodyweight squats', target: '2 x 10', cue: 'Smooth depth, knees tracking cleanly.', media: MEDIA.bodyweightSquat },
     ],
     workout: [
       strengthExercise({
@@ -503,7 +542,7 @@ export const workoutPlan: WorkoutPlanDay[] = [
         primaryMuscle: 'Quads',
         secondaryMuscles: ['Glutes'],
         equipment: 'barbell',
-        media: exDbImage('Barbell_Front_Squat'),
+        media: exDbImage('Front_Squat_Clean_Grip'),
       }),
       strengthExercise({
         id: 'hip-thrust',
@@ -567,10 +606,10 @@ export const workoutPlan: WorkoutPlanDay[] = [
       }),
     ],
     stretch: [
-      { id: 'hamstrings-stretch-volume', name: 'Hamstrings', target: '30 sec', cue: 'Hinge forward with a long spine.' },
-      { id: 'glutes-stretch', name: 'Glutes', target: '30 sec', cue: 'Figure-four position, breathe into the hip.' },
-      { id: 'hip-flexors-stretch-volume', name: 'Hip flexors', target: '30 sec', cue: 'Tuck pelvis first, then glide forward.' },
-      { id: 'calves-stretch-volume', name: 'Calves', target: '30 sec', cue: 'Heel down and breathe slowly.' },
+      { id: 'hamstrings-stretch-volume', name: 'Hamstrings', target: '30 sec', cue: 'Hinge forward with a long spine.', media: MEDIA.hamstringStretch },
+      { id: 'glutes-stretch', name: 'Glutes', target: '30 sec', cue: 'Figure-four position, breathe into the hip.', media: MEDIA.gluteStretch },
+      { id: 'hip-flexors-stretch-volume', name: 'Hip flexors', target: '30 sec', cue: 'Tuck pelvis first, then glide forward.', media: MEDIA.hipFlexorStretch },
+      { id: 'calves-stretch-volume', name: 'Calves', target: '30 sec', cue: 'Heel down and breathe slowly.', media: MEDIA.calfStretch },
     ],
   },
   {
@@ -581,9 +620,9 @@ export const workoutPlan: WorkoutPlanDay[] = [
     duration: '40-55 min',
     accent: 'from-fuchsia-500/15 to-pink-400/10',
     warmup: [
-      { id: 'arm-circles-arms', name: 'Arm circles', target: '20 total', cue: 'Easy range first, then gradually open up.' },
-      { id: 'band-pull-aparts-arms', name: 'Band pull-aparts', target: '2 x 15', cue: 'Move shoulder blades cleanly and keep ribs down.' },
-      { id: 'light-curls-pushdowns', name: 'Light curls + pushdowns', target: '15 each', cue: 'Prime elbows before the heavier arm work.' },
+      { id: 'arm-circles-arms', name: 'Arm circles', target: '20 total', cue: 'Easy range first, then gradually open up.', media: MEDIA.armCircles },
+      { id: 'band-pull-aparts-arms', name: 'Band pull-aparts', target: '2 x 15', cue: 'Move shoulder blades cleanly and keep ribs down.', media: MEDIA.bandPullApart },
+      { id: 'light-curls-pushdowns', name: 'Light curls + pushdowns', target: '15 each', cue: 'Prime elbows before the heavier arm work.', media: MEDIA.lightCurls },
     ],
     workout: [
       strengthExercise({
@@ -663,10 +702,10 @@ export const workoutPlan: WorkoutPlanDay[] = [
       }),
     ],
     stretch: [
-      { id: 'triceps-stretch-arms', name: 'Triceps', target: '30 sec', cue: 'Reach overhead and keep ribs stacked.' },
-      { id: 'biceps-stretch-arms', name: 'Biceps', target: '30 sec', cue: 'Palm on wall, rotate away gently.' },
-      { id: 'shoulders-stretch-arms', name: 'Shoulders', target: '30 sec', cue: 'Cross-body stretch, shoulder down.' },
-      { id: 'neck-stretch', name: 'Neck', target: '20 sec each side', cue: 'Gentle pressure only. No forcing.' },
+      { id: 'triceps-stretch-arms', name: 'Triceps', target: '30 sec', cue: 'Reach overhead and keep ribs stacked.', media: MEDIA.tricepsStretch },
+      { id: 'biceps-stretch-arms', name: 'Biceps', target: '30 sec', cue: 'Palm on wall, rotate away gently.', media: MEDIA.bicepsStretch },
+      { id: 'shoulders-stretch-arms', name: 'Shoulders', target: '30 sec', cue: 'Cross-body stretch, shoulder down.', media: MEDIA.shoulderStretch },
+      { id: 'neck-stretch', name: 'Neck', target: '20 sec each side', cue: 'Gentle pressure only. No forcing.', media: MEDIA.neckStretch },
     ],
   },
   {

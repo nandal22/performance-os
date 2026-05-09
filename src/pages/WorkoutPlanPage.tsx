@@ -131,31 +131,57 @@ function ChecklistItem({
   onToggle: () => void;
 }) {
   return (
-    <motion.button
+    <motion.div
       layout
       whileTap={{ scale: 0.98 }}
-      onClick={onToggle}
-      className={`w-full rounded-2xl border p-3.5 text-left transition-colors ${
+      className={`relative w-full rounded-2xl border p-3.5 text-left transition-colors ${
         checked
           ? 'border-emerald-400/25 bg-emerald-400/10'
           : 'border-white/[0.08] bg-white/[0.035]'
       }`}
     >
-      <div className="flex items-start gap-3">
-        {checked ? (
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 mt-0.5 flex-shrink-0" />
-        ) : (
-          <Circle className="w-5 h-5 text-white/25 mt-0.5 flex-shrink-0" />
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <p className="text-sm font-semibold text-white">{item.name}</p>
-            <p className="text-xs text-primary font-semibold whitespace-nowrap">{item.target}</p>
+      <button type="button" onClick={onToggle} className="w-full text-left">
+        <div className="flex items-start gap-3">
+          {checked ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 mt-0.5 flex-shrink-0" />
+          ) : (
+            <Circle className="w-5 h-5 text-white/25 mt-0.5 flex-shrink-0" />
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm font-semibold text-white">{item.name}</p>
+              <p className="text-xs text-primary font-semibold whitespace-nowrap">{item.target}</p>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed mt-1">{item.cue}</p>
           </div>
-          <p className="text-xs text-muted-foreground leading-relaxed mt-1">{item.cue}</p>
         </div>
-      </div>
-    </motion.button>
+        {item.media && (
+          <div className="mt-3 aspect-[16/9] rounded-xl overflow-hidden bg-black/25 border border-white/[0.08]">
+            <img
+              src={item.media.url}
+              alt={`${item.name} demo`}
+              loading="lazy"
+              className="w-full h-full object-contain"
+              onError={event => {
+                event.currentTarget.style.display = 'none';
+              }}
+            />
+          </div>
+        )}
+      </button>
+      {item.media && (
+        <a
+          href={item.media.sourceUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="absolute right-5 bottom-5 rounded-xl bg-black/65 backdrop-blur px-2 py-1 text-[10px] text-white/75 flex items-center gap-1"
+          aria-label={`${item.name} media source`}
+        >
+          <ExternalLink className="w-3 h-3" />
+          {item.media.source}
+        </a>
+      )}
+    </motion.div>
   );
 }
 

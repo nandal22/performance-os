@@ -1,11 +1,26 @@
 import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import { Flame, Plus, Trash2, Utensils, Beef, Wheat, Droplet, type LucideIcon } from 'lucide-react';
+import {
+  Beef,
+  Check,
+  Droplet,
+  Flame,
+  Footprints,
+  Pencil,
+  Plus,
+  Save,
+  Trash2,
+  Utensils,
+  X,
+  Wheat,
+  type LucideIcon,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { cutPhaseTargets } from '@/data/workoutPlan';
 import { toISODate } from '@/lib/utils';
 import { calorieLogsService, type CalorieLog, type MealType } from '@/services/calorieLogs';
+import { dailyStepsService } from '@/services/dailySteps';
 
 const MEALS: { value: MealType; label: string }[] = [
   { value: 'breakfast', label: 'Breakfast' },
@@ -14,11 +29,33 @@ const MEALS: { value: MealType; label: string }[] = [
   { value: 'snack', label: 'Snack' },
 ];
 
-const QUICK_FOODS = [
-  { name: 'Whey protein', meal: 'snack' as MealType, calories: 120, protein: 24, carbs: 3, fat: 2 },
-  { name: 'Chicken breast + rice', meal: 'lunch' as MealType, calories: 480, protein: 45, carbs: 52, fat: 8 },
-  { name: 'Eggs + toast', meal: 'breakfast' as MealType, calories: 360, protein: 24, carbs: 28, fat: 16 },
-  { name: 'Greek yogurt', meal: 'snack' as MealType, calories: 160, protein: 18, carbs: 16, fat: 2 },
+interface QuickFood {
+  id: string;
+  name: string;
+  meal: MealType;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+interface QuickFoodDraft {
+  id: string;
+  name: string;
+  meal: MealType;
+  calories: string;
+  protein: string;
+  carbs: string;
+  fat: string;
+}
+
+const QUICK_FOODS_KEY = 'perf-os-quick-foods';
+
+const DEFAULT_QUICK_FOODS: QuickFood[] = [
+  { id: 'whey-protein', name: 'Whey protein', meal: 'snack', calories: 140, protein: 24, carbs: 3, fat: 2 },
+  { id: 'chicken-rice', name: 'Chicken breast + rice', meal: 'lunch', calories: 480, protein: 45, carbs: 52, fat: 8 },
+  { id: 'eggs-toast', name: 'Eggs + toast', meal: 'breakfast', calories: 360, protein: 24, carbs: 28, fat: 16 },
+  { id: 'greek-yogurt', name: 'Greek yogurt', meal: 'snack', calories: 160, protein: 18, carbs: 16, fat: 2 },
 ];
 
 const emptyForm = {
@@ -35,6 +72,87 @@ function clampPct(value: number, target: number) {
 
 function readNumber(value: string) {
   return Math.max(0, Number.parseFloat(value) || 0);
+}
+
+function isMealType(value: unknown): value is MealType {
+  return MEALS.some(meal => meal.value === value);
+}
+
+function sanitizeQuickFood(item: unknown, fallbackId: string): QuickFood | null {
+  if (typeof item !== 'object' || item === null) return null;
+  const food = item as Partial<QuickFood>;
+  const name = typeof food.name === 'string' ? food.name.trim() : '';
+  const calories = typeof food.calories === 'number' ? food.calories : 0;
+  if (!name || calories <= 0) return null;
+
+  return {
+    id: typeof food.id === 'string' && food.id ? food.id : fallbackId,
+    name,
+    meal: isMealType(food.meal) ? food.meal : 'snack',
+    calories,
+    protein: typeof food.protein === 'number' ? food.protein : 0,
+    carbs: typeof food.carbs === 'number' ? food.carbs : 0,
+    fat: typeof food.fat === 'number' ? food.fat : 0,
+  };
+}
+
+function readQuickFoods(): QuickFood[] {
+  try {
+    const raw = localStorage.getItem(QUICK_FOODS_KEY);
+    if (!raw) return DEFAULT_QUICK_FOODS;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return DEFAULT_QUICK_FOODS;
+    const foods = parsed
+      .map((item, index) => sanitizeQuickFood(item, `quick-food-${index}`))
+      .filter((item): item is QuickFood => Boolean(item));
+    return foods.length > 0 ? foods : DEFAULT_QUICK_FOODS;
+  } catch {
+    return DEFAULT_QUICK_FOODS;
+  }
+}
+
+function writeQuickFoods(foods: QuickFood[]) {
+  localStorage.setItem(QUICK_FOODS_KEY, JSON.stringify(foods));
+}
+
+function toQuickDraft(food: QuickFood): QuickFoodDraft {
+  return {
+    id: food.id,
+    name: food.name,
+    meal: food.meal,
+    calories: String(food.calories || ''),
+    protein: String(food.protein || ''),
+    carbs: String(food.carbs || ''),
+    fat: String(food.fat || ''),
+  };
+}
+
+function fromQuickDraft(draft: QuickFoodDraft): QuickFood | null {
+  const name = draft.name.trim();
+  const calories = readNumber(draft.calories);
+  if (!name || calories <= 0) return null;
+
+  return {
+    id: draft.id,
+    name,
+    meal: draft.meal,
+    calories,
+    protein: readNumber(draft.protein),
+    carbs: readNumber(draft.carbs),
+    fat: readNumber(draft.fat),
+  };
+}
+
+function createQuickDraft(): QuickFoodDraft {
+  return {
+    id: crypto.randomUUID(),
+    name: '',
+    meal: 'snack',
+    calories: '',
+    protein: '',
+    carbs: '',
+    fat: '',
+  };
 }
 
 function MacroStat({
@@ -71,6 +189,10 @@ export default function CaloriesPage() {
   const [meal, setMeal] = useState<MealType>('breakfast');
   const [form, setForm] = useState(emptyForm);
   const [logs, setLogs] = useState<CalorieLog[]>(() => calorieLogsService.getByDate());
+  const [stepsInput, setStepsInput] = useState(() => String(dailyStepsService.get()?.steps ?? ''));
+  const [quickFoods, setQuickFoods] = useState<QuickFood[]>(readQuickFoods);
+  const [editingQuick, setEditingQuick] = useState(false);
+  const [quickDrafts, setQuickDrafts] = useState<QuickFoodDraft[]>(() => readQuickFoods().map(toQuickDraft));
 
   const summary = useMemo(() => (
     logs.reduce(
@@ -87,6 +209,9 @@ export default function CaloriesPage() {
   const caloriePct = Math.min(100, (summary.calories / cutPhaseTargets.caloriesTarget) * 100);
   const inRange = summary.calories >= cutPhaseTargets.caloriesMin && summary.calories <= cutPhaseTargets.caloriesMax;
   const remaining = cutPhaseTargets.caloriesTarget - summary.calories;
+  const steps = Math.round(readNumber(stepsInput));
+  const stepsPct = Math.min(100, (steps / 10000) * 100);
+  const stepsStatus = steps >= 10000 ? 'Top range' : steps >= 8000 ? 'On track' : `${Math.max(0, 8000 - steps).toLocaleString()} to 8k`;
 
   const refresh = (nextDate = date) => {
     setLogs(calorieLogsService.getByDate(nextDate));
@@ -95,9 +220,10 @@ export default function CaloriesPage() {
   const changeDate = (nextDate: string) => {
     setDate(nextDate);
     refresh(nextDate);
+    setStepsInput(String(dailyStepsService.get(nextDate)?.steps ?? ''));
   };
 
-  const addEntry = (preset?: (typeof QUICK_FOODS)[number]) => {
+  const addEntry = (preset?: QuickFood) => {
     const input = preset ?? {
       name: form.name.trim(),
       meal,
@@ -123,6 +249,41 @@ export default function CaloriesPage() {
     setMeal(input.meal);
     refresh();
     toast.success(`${input.name} logged`);
+  };
+
+  const saveSteps = () => {
+    if (steps <= 0) return toast.error('Enter daily steps');
+    dailyStepsService.upsert(date, steps);
+    setStepsInput(String(steps));
+    toast.success('Steps saved');
+  };
+
+  const startEditingQuick = () => {
+    setQuickDrafts(quickFoods.map(toQuickDraft));
+    setEditingQuick(true);
+  };
+
+  const cancelQuickEditing = () => {
+    setQuickDrafts(quickFoods.map(toQuickDraft));
+    setEditingQuick(false);
+  };
+
+  const updateQuickDraft = (id: string, patch: Partial<QuickFoodDraft>) => {
+    setQuickDrafts(prev => prev.map(food => (food.id === id ? { ...food, ...patch } : food)));
+  };
+
+  const saveQuickDrafts = () => {
+    const nextFoods = quickDrafts
+      .map(fromQuickDraft)
+      .filter((food): food is QuickFood => Boolean(food));
+
+    if (nextFoods.length === 0) return toast.error('Keep at least one quick card');
+
+    setQuickFoods(nextFoods);
+    writeQuickFoods(nextFoods);
+    setQuickDrafts(nextFoods.map(toQuickDraft));
+    setEditingQuick(false);
+    toast.success('Quick cards saved');
   };
 
   const deleteEntry = (id: string) => {
@@ -179,6 +340,51 @@ export default function CaloriesPage() {
           <MacroStat icon={Wheat} label="Carbs" value={summary.carbs} target={180} tone="text-sky-400" bar="bg-sky-400" />
           <MacroStat icon={Droplet} label="Fat" value={summary.fat} target={60} tone="text-amber-400" bar="bg-amber-400" />
         </div>
+
+        <section className="rounded-2xl glass p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Footprints className="w-4 h-4 text-emerald-300" />
+              <p className="text-sm font-semibold text-white">Daily steps</p>
+            </div>
+            <span className={`rounded-xl px-2.5 py-1 text-[11px] font-semibold ${steps >= 8000 ? 'bg-emerald-400/10 text-emerald-300' : 'bg-white/[0.05] text-muted-foreground'}`}>
+              {stepsStatus}
+            </span>
+          </div>
+
+          <div className="flex gap-2">
+            <input
+              type="number"
+              inputMode="numeric"
+              value={stepsInput}
+              onChange={e => setStepsInput(e.target.value)}
+              className="min-w-0 flex-1 bg-white/[0.05] border border-white/[0.1] rounded-xl px-3 py-3 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-primary/50"
+              placeholder="8000"
+            />
+            <button
+              onClick={saveSteps}
+              className="h-12 px-4 rounded-xl bg-emerald-400/15 border border-emerald-400/25 text-emerald-200 text-sm font-semibold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+            >
+              <Save className="w-4 h-4" />
+              Save
+            </button>
+          </div>
+
+          <div className="h-2 rounded-full bg-white/[0.08] overflow-hidden">
+            <div className="h-full bg-emerald-400" style={{ width: `${stepsPct}%` }} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {[8000, 10000].map(target => (
+              <button
+                key={target}
+                onClick={() => setStepsInput(String(target))}
+                className="rounded-xl bg-white/[0.04] border border-white/[0.08] py-2 text-xs font-semibold text-muted-foreground active:scale-[0.98] transition-transform"
+              >
+                {target.toLocaleString()}
+              </button>
+            ))}
+          </div>
+        </section>
 
         <section className="rounded-2xl glass p-4 space-y-3">
           <div className="flex items-center gap-2">
@@ -239,19 +445,110 @@ export default function CaloriesPage() {
         </section>
 
         <section>
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-3 px-0.5">Quick add</p>
-          <div className="grid grid-cols-2 gap-2">
-            {QUICK_FOODS.map(food => (
+          <div className="flex items-center justify-between mb-3 px-0.5">
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Quick add</p>
+            {editingQuick ? (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={cancelQuickEditing}
+                  className="h-8 w-8 rounded-xl bg-white/[0.04] border border-white/[0.08] text-muted-foreground flex items-center justify-center"
+                  aria-label="Cancel quick card edits"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={saveQuickDrafts}
+                  className="h-8 w-8 rounded-xl bg-primary text-white flex items-center justify-center"
+                  aria-label="Save quick cards"
+                >
+                  <Check className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
               <button
-                key={food.name}
+                onClick={startEditingQuick}
+                className="h-8 w-8 rounded-xl bg-white/[0.04] border border-white/[0.08] text-muted-foreground flex items-center justify-center"
+                aria-label="Edit quick cards"
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          <div className={`${editingQuick ? 'hidden' : 'grid'} grid-cols-2 gap-2`}>
+            {quickFoods.map(food => (
+              <button
+                key={food.id}
                 onClick={() => addEntry(food)}
                 className="rounded-2xl bg-white/[0.04] border border-white/[0.08] p-3 text-left active:scale-[0.98] transition-transform"
               >
                 <p className="text-sm font-semibold text-white leading-snug">{food.name}</p>
-                <p className="text-[11px] text-muted-foreground mt-1 nums">{food.calories} kcal · {food.protein}g protein</p>
+                <p className="text-[11px] text-muted-foreground mt-1 nums">{food.calories} kcal | {food.protein}g protein</p>
               </button>
             ))}
           </div>
+          {editingQuick && (
+            <div className="space-y-2">
+              {quickDrafts.map(food => (
+                <div key={food.id} className="rounded-2xl bg-white/[0.04] border border-white/[0.08] p-3 space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={food.name}
+                      onChange={e => updateQuickDraft(food.id, { name: e.target.value })}
+                      className="min-w-0 flex-1 bg-white/[0.05] border border-white/[0.1] rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-primary/50"
+                      placeholder="Food"
+                    />
+                    <button
+                      onClick={() => setQuickDrafts(prev => prev.filter(item => item.id !== food.id))}
+                      className="w-10 rounded-xl text-white/30 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+                      aria-label={`Delete ${food.name || 'quick card'}`}
+                    >
+                      <Trash2 className="w-4 h-4 mx-auto" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2">
+                    {([
+                      ['calories', 'Kcal'],
+                      ['protein', 'P'],
+                      ['carbs', 'C'],
+                      ['fat', 'F'],
+                    ] as const).map(([key, label]) => (
+                      <div key={key}>
+                        <label className="text-[10px] text-muted-foreground block mb-1">{label}</label>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={food[key]}
+                          onChange={e => updateQuickDraft(food.id, { [key]: e.target.value })}
+                          className="w-full bg-white/[0.05] border border-white/[0.1] rounded-xl px-2 py-2 text-sm text-white text-center placeholder:text-white/25 focus:outline-none focus:border-primary/50"
+                          placeholder="0"
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  <select
+                    value={food.meal}
+                    onChange={e => updateQuickDraft(food.id, { meal: e.target.value as MealType })}
+                    className="w-full bg-white/[0.05] border border-white/[0.1] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-primary/50"
+                  >
+                    {MEALS.map(item => (
+                      <option key={item.value} value={item.value}>{item.label}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+
+              <button
+                onClick={() => setQuickDrafts(prev => [...prev, createQuickDraft()])}
+                className="w-full h-11 rounded-xl bg-white/[0.04] border border-dashed border-white/[0.14] text-sm font-semibold text-muted-foreground flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+              >
+                <Plus className="w-4 h-4" />
+                Add card
+              </button>
+            </div>
+          )}
         </section>
 
         <section>
@@ -282,7 +579,7 @@ export default function CaloriesPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-white truncate">{log.name}</p>
                       <p className="text-[11px] text-muted-foreground capitalize nums">
-                        {log.meal} · {log.calories} kcal · P {log.protein}g · C {log.carbs}g · F {log.fat}g
+                        {log.meal} | {log.calories} kcal | P {log.protein}g | C {log.carbs}g | F {log.fat}g
                       </p>
                     </div>
                     <button
