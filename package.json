@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "perf:smoke": "node --eval \"(async()=>{const base=process.env.PERF_URL||process.env.URL||'http://localhost:4173';const paths=(process.env.PERF_PATHS?process.env.PERF_PATHS.split(','):['/','/manifest.webmanifest','/sw.js']);const runs=Number(process.env.PERF_RUNS||3);const timeout=Number(process.env.PERF_TIMEOUT_MS||5000);let failed=false;for(let run=1;run<=runs;run++){await Promise.all(paths.map(async path=>{const url=new URL(path,base);const controller=new AbortController();const started=performance.now();const timer=setTimeout(()=>controller.abort(),timeout);try{const response=await fetch(url,{signal:controller.signal});const ms=Math.round(performance.now()-started);console.log((response.ok?'ok':'fail')+' run='+run+' status='+response.status+' time='+ms+'ms url='+url.href);if(!response.ok)failed=true;}catch(error){failed=true;console.error('fail run='+run+' url='+url.href+' error='+(error&&error.message?error.message:error));}finally{clearTimeout(timer);}}));}if(failed)process.exit(1);})()\""
   },
   "dependencies": {
     "@supabase/auth-helpers-react": "^0.15.0",

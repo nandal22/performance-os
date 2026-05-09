@@ -5,10 +5,13 @@ import {
   Calculator,
   Check,
   Droplet,
+  ExternalLink,
   Flame,
   Footprints,
+  Loader2,
   Pencil,
   Plus,
+  Search,
   Save,
   Trash2,
   Utensils,
@@ -23,6 +26,11 @@ import { estimateMeal, MEAL_ESTIMATE_EXAMPLES, type MealEstimate } from '@/engin
 import { toISODate } from '@/lib/utils';
 import { calorieLogsService, type CalorieLog, type CalorieStorageMode, type MealType } from '@/services/calorieLogs';
 import { dailyStepsService, type DailyStepsStorageMode } from '@/services/dailySteps';
+import {
+  searchOpenFoodFacts,
+  servingFromOpenFoodFacts,
+  type OpenFoodFactsProduct,
+} from '@/services/openFoodFacts';
 import { DEFAULT_QUICK_FOODS, quickFoodsService, type QuickFood, type QuickFoodsStorageMode } from '@/services/quickFoods';
 
 const MEALS: { value: MealType; label: string }[] = [
@@ -144,6 +152,9 @@ export default function CaloriesPage() {
   const [quickDrafts, setQuickDrafts] = useState<QuickFoodDraft[]>(() => DEFAULT_QUICK_FOODS.map(toQuickDraft));
   const [estimateInput, setEstimateInput] = useState('');
   const [mealEstimate, setMealEstimate] = useState<MealEstimate | null>(null);
+  const [foodFactsResults, setFoodFactsResults] = useState<OpenFoodFactsProduct[]>([]);
+  const [foodFactsLoading, setFoodFactsLoading] = useState(false);
+  const [foodFactsError, setFoodFactsError] = useState('');
   const [loadingData, setLoadingData] = useState(true);
   const [storageMode, setStorageMode] = useState<'database' | 'local'>('database');
 
@@ -270,6 +281,39 @@ export default function CaloriesPage() {
     setMealEstimate(null);
     await loadData(date);
     toast.success('Meal note saved');
+  };
+
+  const runOpenFoodFactsSearch = async () => {
+    const query = estimateInput.trim();
+    if (query.length < 2) return toast.error('Enter a food or product name');
+
+    setFoodFactsLoading(true);
+    setFoodFactsError('');
+    try {
+      const products = await searchOpenFoodFacts(query);
+      setFoodFactsResults(products);
+      if (products.length === 0) setFoodFactsError('No open-data matches found');
+    } catch {
+      setFoodFactsError('Open Food Facts lookup failed');
+      setFoodFactsResults([]);
+    } finally {
+      setFoodFactsLoading(false);
+    }
+  };
+
+  const logOpenFoodFactsServing = async (product: OpenFoodFactsProduct) => {
+    const serving = servingFromOpenFoodFacts(product);
+    await calorieLogsService.create({
+      date,
+      meal,
+      name: serving.name.length > 90 ? `${serving.name.slice(0, 87)}...` : serving.name,
+      calories: serving.calories,
+      protein: serving.protein,
+      carbs: serving.carbs,
+      fat: serving.fat,
+    });
+    await loadData(date);
+    toast.success(`${product.name} logged`);
   };
 
   const saveSteps = async () => {
@@ -435,11 +479,17 @@ export default function CaloriesPage() {
 
           <textarea
             value={estimateInput}
-            onChange={e => setEstimateInput(e.target.value)}
+            onChange={e => {
+              setEstimateInput(e.target.value);
+              setFoodFactsError('');
+            }}
             rows={2}
             placeholder="3 chapati and 1 bowl paneer curry"
             className="w-full bg-white/[0.05] border border-white/[0.1] rounded-xl px-3 py-3 text-sm text-white placeholder:text-white/25 resize-none focus:outline-none focus:border-primary/50"
           />
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Home food uses the local serving table. Packaged/common product lookup uses Open Food Facts open data.
+          </p>
 
           <div className="grid grid-cols-4 gap-1.5">
             {MEALS.map(item => (
@@ -510,13 +560,87 @@ export default function CaloriesPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-2">
+          {(foodFactsResults.length > 0 || foodFactsError || foodFactsLoading) && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Open Food Facts</p>
+                {foodFactsLoading && <Loader2 className="w-4 h-4 text-sky-300 animate-spin" />}
+              </div>
+
+              {foodFactsError && (
+                <div className="rounded-xl bg-orange-400/10 border border-orange-400/20 px-3 py-2">
+                  <p className="text-[11px] text-orange-200">{foodFactsError}</p>
+                </div>
+              )}
+
+              {foodFactsResults.map(product => {
+                const serving = servingFromOpenFoodFacts(product);
+                return (
+                  <div key={product.code} className="rounded-xl bg-white/[0.035] border border-white/[0.07] p-2.5 flex gap-2">
+                    {product.imageUrl ? (
+                      <img
+                        src={product.imageUrl}
+                        alt=""
+                        loading="lazy"
+                        className="w-12 h-12 rounded-lg object-cover bg-black/25 border border-white/[0.08]"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-sky-400/10 border border-sky-400/15 flex items-center justify-center">
+                        <Utensils className="w-4 h-4 text-sky-200" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{product.name}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">
+                            {product.brand ? `${product.brand} | ` : ''}
+                            {serving.grams}g serving
+                          </p>
+                        </div>
+                        <a
+                          href={product.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-1 rounded-lg text-white/35 hover:text-sky-200 hover:bg-white/[0.06]"
+                          aria-label={`${product.name} source`}
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <p className="text-xs text-muted-foreground nums">
+                          {serving.calories} kcal | P {serving.protein}g | C {serving.carbs}g | F {serving.fat}g
+                        </p>
+                        <button
+                          onClick={() => logOpenFoodFactsServing(product)}
+                          className="rounded-lg bg-sky-400/15 border border-sky-400/25 px-2.5 py-1 text-[11px] font-semibold text-sky-100 active:scale-[0.98] transition-transform"
+                        >
+                          Log
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="grid grid-cols-4 gap-2">
             <button
               onClick={() => runMealEstimate()}
               className="h-11 rounded-xl bg-sky-400/15 border border-sky-400/25 text-sky-100 text-sm font-semibold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
             >
               <Calculator className="w-4 h-4" />
               Estimate
+            </button>
+            <button
+              onClick={runOpenFoodFactsSearch}
+              disabled={foodFactsLoading}
+              className="h-11 rounded-xl bg-white/[0.05] border border-white/[0.1] text-sky-100 text-sm font-semibold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-60"
+            >
+              {foodFactsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+              Lookup
             </button>
             <button
               onClick={logMealEstimate}

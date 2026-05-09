@@ -26,7 +26,9 @@ export interface CalorieResult {
   met: number;
   method: CalorieMethod;
   duration_hrs: number;
+  active_duration_hrs?: number;
   total_volume_kg?: number;
+  total_reps?: number;
 }
 
 export interface WorkoutCalories {
@@ -102,6 +104,9 @@ export const ACTIVITY_TYPE_MET: Record<string, number> = {
 /** Active time per set + average rest - used to estimate session duration. */
 const SET_DURATION_SECS = 45;
 const REST_DURATION_SECS = 90;
+const SECONDS_PER_REP = 3;
+const SET_TRANSITION_SECS = 15;
+const STRENGTH_RECOVERY_MET = 3.2;
 
 /** Epley 1-rep max estimate. */
 export function epley1RM(weight: number, reps: number): number {
@@ -123,6 +128,14 @@ export function intensityToMET(intensity: number): number {
     if (intensity <= entry.maxIntensity) return entry.met;
   }
   return STRENGTH_INTENSITY_MET[STRENGTH_INTENSITY_MET.length - 1].met;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function roundToTenth(value: number): number {
+  return Math.round(value * 10) / 10;
 }
 
 /** Detect activity type from free-text notes. */
@@ -189,6 +202,9 @@ export function cyclingSpeedToMET(speedKmh: number): number {
 export interface StrengthSetInput {
   weight: number;
   reps: number;
+  loadMode?: 'total' | 'dumbbell_pair' | 'barbell_plates' | 'bodyweight';
+  bodyweightFactor?: number;
+  bodyweightKg?: number | null;
 }
 
 export interface StrengthInput {
@@ -196,28 +212,60 @@ export interface StrengthInput {
   duration?: number;
 }
 
+function effectiveStrengthLoad(set: StrengthSetInput, profileWeightKg: number): number {
+  const loggedWeight = Math.max(0, set.weight || 0);
+
+  if (set.loadMode !== 'bodyweight') {
+    return loggedWeight;
+  }
+
+  const bodyweightKg = set.bodyweightKg && set.bodyweightKg > 0
+    ? set.bodyweightKg
+    : profileWeightKg;
+  const factor = clamp(set.bodyweightFactor ?? 1, 0, 1.5);
+  const bodyweightLoad = bodyweightKg > 0 ? bodyweightKg * factor : 0;
+
+  return Math.max(loggedWeight, bodyweightLoad);
+}
+
 /**
  * Calculate calories for a strength session.
  *
- * Strength calories are still mainly driven by body weight and time, but this
- * estimator also applies a small load-volume boost so heavier logged work
- * produces a higher estimate than the same duration with very light sets.
+ * Strength calories are still mainly driven by body weight and time. Logged
+ * reps, load, volume, and active set time nudge the MET estimate up or down.
  */
 export function calcStrengthCalories(input: StrengthInput, weightKg: number): CalorieResult {
   if (weightKg <= 0) {
     return { calories: 0, met: STRENGTH_DEFAULT_MET, method: 'strength_intensity', duration_hrs: 0 };
   }
 
-  const validSets = input.sets.filter(s => s.weight > 0 && s.reps > 0);
-  const totalVolumeKg = validSets.reduce((sum, s) => sum + s.weight * s.reps, 0);
+  const hasLoggedDuration = typeof input.duration === 'number' && input.duration > 0;
+  const validSets = input.sets
+    .map(set => ({
+      ...set,
+      reps: Math.max(0, set.reps || 0),
+      effectiveWeight: effectiveStrengthLoad(set, weightKg),
+    }))
+    .filter(set => set.reps > 0);
+  const weightedSets = validSets.filter(set => set.effectiveWeight > 0);
+  const totalVolumeKg = validSets.reduce((sum, set) => sum + set.effectiveWeight * set.reps, 0);
+  const totalReps = validSets.reduce((sum, set) => sum + set.reps, 0);
 
-  const totalSets = Math.max(input.sets.length, 1);
-  const estimatedDurationMins = input.duration
-    ?? Math.round((totalSets * (SET_DURATION_SECS + REST_DURATION_SECS)) / 60);
+  const totalSets = Math.max(validSets.length || input.sets.length, 1);
+  const fallbackDurationMins = Math.round((totalSets * (SET_DURATION_SECS + REST_DURATION_SECS)) / 60);
+  const estimatedDurationMins = hasLoggedDuration ? (input.duration as number) : fallbackDurationMins;
   const duration_hrs = estimatedDurationMins / 60;
-  const method: CalorieMethod = validSets.length > 0
+  const estimatedActiveMins = Math.min(
+    estimatedDurationMins,
+    Math.max(
+      (totalSets * SET_DURATION_SECS) / 60,
+      (totalReps * SECONDS_PER_REP + totalSets * SET_TRANSITION_SECS) / 60,
+    ),
+  );
+  const active_duration_hrs = estimatedActiveMins / 60;
+  const method: CalorieMethod = totalVolumeKg > 0
     ? 'strength_load_adjusted'
-    : input.duration ? 'strength_intensity' : 'strength_duration';
+    : hasLoggedDuration ? 'strength_intensity' : 'strength_duration';
 
   if (validSets.length === 0) {
     return {
@@ -225,29 +273,44 @@ export function calcStrengthCalories(input: StrengthInput, weightKg: number): Ca
       met: STRENGTH_DEFAULT_MET,
       method,
       duration_hrs,
+      active_duration_hrs,
       total_volume_kg: 0,
+      total_reps: 0,
     };
   }
 
-  const best1RM = validSets.reduce((best, s) => {
-    const rm = epley1RM(s.weight, s.reps);
-    return rm > best ? rm : best;
-  }, 0);
+  const avgIntensity = weightedSets.length > 0
+    ? weightedSets.reduce((sum, set) => (
+        sum + set.effectiveWeight / epley1RM(set.effectiveWeight, set.reps)
+      ), 0) / weightedSets.length
+    : 0.65;
 
-  const avgIntensity =
-    validSets.reduce((sum, s) => sum + s.weight / epley1RM(s.weight, s.reps), 0) / validSets.length;
-
-  const baseMet = best1RM > 0 ? intensityToMET(avgIntensity) : STRENGTH_DEFAULT_MET;
+  const avgRelativeLoad = weightedSets.length > 0
+    ? weightedSets.reduce((sum, set) => sum + set.effectiveWeight / weightKg, 0) / weightedSets.length
+    : 0;
   const volumePerMinute = estimatedDurationMins > 0 ? totalVolumeKg / estimatedDurationMins : 0;
-  const volumeBoost = Math.min(2.0, volumePerMinute / Math.max(weightKg * 6, 1));
-  const met = Math.min(8.5, Math.round((baseMet + volumeBoost) * 10) / 10);
+  const loadBoost = clamp(avgRelativeLoad * 0.8, 0, 1.3);
+  const densityBoost = clamp(volumePerMinute / Math.max(weightKg * 4, 1), 0, 1.2);
+  const activeMet = clamp(
+    intensityToMET(avgIntensity) + loadBoost + densityBoost,
+    STRENGTH_DEFAULT_MET,
+    9.0,
+  );
+  const activeShare = clamp(estimatedActiveMins / Math.max(estimatedDurationMins, 1), 0.25, 0.75);
+  const met = roundToTenth(clamp(
+    activeMet * activeShare + STRENGTH_RECOVERY_MET * (1 - activeShare),
+    3.2,
+    8.5,
+  ));
 
   return {
     calories: Math.round(met * weightKg * duration_hrs),
     met,
     method,
     duration_hrs,
+    active_duration_hrs,
     total_volume_kg: Math.round(totalVolumeKg),
+    total_reps: totalReps,
   };
 }
 

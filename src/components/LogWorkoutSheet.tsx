@@ -115,6 +115,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
   const [calories, setCalories] = useState('');
 
   const repsRef = useRef<HTMLInputElement>(null);
+  const currentExerciseId = currentEx?.id;
 
   // Load exercises once
   useEffect(() => {
@@ -152,15 +153,15 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
     } catch {
       localStorage.removeItem(DRAFT_KEY);
     }
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [autoResume, open]);
 
   // Fetch last session whenever exercise changes
   useEffect(() => {
-    if (!currentEx) { setLastSession(null); return; }
-    strengthSetsService.getLastSession(currentEx.id)
+    if (!currentExerciseId) { setLastSession(null); return; }
+    strengthSetsService.getLastSession(currentExerciseId)
       .then(setLastSession)
       .catch(() => setLastSession(null));
-  }, [currentEx?.id]);
+  }, [currentExerciseId]);
 
   if (!open) return null;
 
@@ -199,13 +200,19 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
     }
     if (loadMode === 'bodyweight') {
       const factor = bodyFactorValue / 100;
-      const effective = bodyWeightKg ? Math.round(bodyWeightKg * factor * 10) / 10 : 0;
+      const bodyweightLoad = bodyWeightKg ? Math.round(bodyWeightKg * factor * 10) / 10 : 0;
+      const effective = Math.round((bodyweightLoad + currentWeightValue) * 10) / 10;
+      const bodyweightLabel = bodyWeightKg
+        ? `${bodyFactorValue}% bodyweight (${bodyweightLoad} kg)`
+        : `${bodyFactorValue}% bodyweight`;
       return {
         weight: effective,
-        input_weight: effective,
+        input_weight: currentWeightValue,
         bodyweight_factor: factor,
         bodyweight_kg: bodyWeightKg,
-        load_label: bodyWeightKg ? `${bodyFactorValue}% bodyweight (${effective} kg)` : `${bodyFactorValue}% bodyweight`,
+        load_label: currentWeightValue > 0
+          ? `${bodyweightLabel} + ${currentWeightValue} kg`
+          : bodyweightLabel,
       };
     }
     return {
@@ -238,7 +245,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
     if (!currentReps || parseInt(currentReps) <= 0) return toast.error('Enter reps');
     const load = buildLoad();
     if (loadMode === 'bodyweight' && !bodyWeightKg) {
-      toast.message('Bodyweight set saved without load estimate');
+      toast.message('Bodyweight set saved without bodyweight load estimate');
     }
 
     const newSet: LoggedSet = {
@@ -344,13 +351,24 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
     }
     grouped[s.exercise_id].sets.push(s);
   }
+  const durationMins = duration ? parseInt(duration, 10) : 0;
   const strengthCalories = type === 'strength' && bodyWeightKg
     ? calcStrengthCalories({
-        sets: loggedSets.map(set => ({ reps: set.reps, weight: set.weight })),
-        duration: duration ? parseInt(duration, 10) : undefined,
+        sets: loggedSets.map(set => ({
+          reps: set.reps,
+          weight: set.weight,
+          loadMode: set.load_mode,
+          bodyweightFactor: set.bodyweight_factor,
+          bodyweightKg: set.bodyweight_kg,
+        })),
+        duration: durationMins > 0 ? durationMins : undefined,
       }, bodyWeightKg)
     : null;
-  const durationMins = duration ? parseInt(duration, 10) : 0;
+  const strengthEstimateCopy = !bodyWeightKg
+    ? 'Source: profile body weight required for app estimate.'
+    : durationMins > 0
+      ? 'Source: app estimate using body weight, duration, reps, and effective load.'
+      : 'Source: app estimate using body weight, set volume, and estimated active/rest time.';
   const distanceKm = distance ? parseFloat(distance) : undefined;
   const avgHeartRate = avgHr ? parseInt(avgHr, 10) : undefined;
   const machineCalories = calories ? parseInt(calories, 10) : undefined;
@@ -408,7 +426,9 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
             met: strengthCalories.met,
             method: strengthCalories.method,
             durationHours: strengthCalories.duration_hrs,
+            activeDurationHours: strengthCalories.active_duration_hrs ?? null,
             totalVolumeKg: strengthCalories.total_volume_kg ?? 0,
+            totalReps: strengthCalories.total_reps ?? 0,
             bodyWeightKg,
           } : null,
           strengthLoad: {
@@ -797,7 +817,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                       <div>
                         <p className="text-xs font-semibold text-orange-200">Burn estimate</p>
                         <p className="text-[11px] text-muted-foreground mt-0.5">
-                          Uses body weight, duration, reps, and effective load.
+                          {strengthEstimateCopy}
                         </p>
                       </div>
                       <p className="text-lg font-bold text-white nums">

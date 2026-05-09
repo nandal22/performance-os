@@ -49,6 +49,7 @@ Cardio logging supports:
 - Manual food logging with calories and macros.
 - Raw meal notes when calories are unknown, so the meal is not lost.
 - Local meal estimator for common foods such as chapati, paneer, dal, rice, eggs, whey, banana, and more.
+- Open Food Facts lookup for packaged/common products, with serving-sized macros and cached results.
 - User-editable quick-add food cards.
 - Daily steps saved alongside food tracking.
 
