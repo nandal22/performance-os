@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, TrendingUp, Dumbbell, Flame, Settings } from 'lucide-react';
+import { Home, TrendingUp, Dumbbell, Flame, Mic2, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const TABS = [
@@ -7,6 +7,7 @@ const TABS = [
   { path: '/plan',      icon: Dumbbell,   label: 'Plan'     },
   { path: '/calories',  icon: Flame,      label: 'Food'     },
   { path: '/progress',  icon: TrendingUp, label: 'Progress' },
+  { path: '/speech',    icon: Mic2,       label: 'Speech'   },
   { path: '/settings',  icon: Settings,   label: 'Settings' },
 ] as const;
 

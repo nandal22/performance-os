@@ -9,6 +9,7 @@ import WorkoutPlanPage  from '@/pages/WorkoutPlanPage';
 import CaloriesPage     from '@/pages/CaloriesPage';
 import ProgressPage     from '@/pages/ProgressPage';
 import BodyMetricsPage  from '@/pages/BodyMetricsPage';
+import SpeechPage       from '@/pages/SpeechPage';
 import SettingsPage     from '@/pages/SettingsPage';
 import BottomNav        from '@/components/BottomNav';
 
@@ -54,6 +55,7 @@ export default function App() {
           <Route path="/calories" element={<CaloriesPage />}    />
           <Route path="/progress" element={<ProgressPage />}   />
           <Route path="/body"     element={<BodyMetricsPage />} />
+          <Route path="/speech"   element={<SpeechPage />}      />
           <Route path="/settings" element={<SettingsPage />}    />
           <Route path="/history"  element={<Navigate to="/" replace />} />
           <Route path="/goals"    element={<Navigate to="/" replace />} />

@@ -143,3 +143,23 @@ export type CreateStrengthSet = Omit<StrengthSet, 'id' | 'volume' | 'created_at'
 export type CreateCardioMetrics = Omit<CardioMetrics, 'id' | 'created_at'>;
 export type CreateBodyMetric = Omit<BodyMetric, 'id' | 'user_id' | 'created_at'>;
 export type CreateExercise = Omit<Exercise, 'id' | 'created_at'>;
+
+// ---- Speech Practice ----
+
+export interface SpeechPracticeSession {
+  id: string;
+  user_id: string;
+  date: string;                 // YYYY-MM-DD
+  completed_drills: string[];   // static frontend drill ids completed that day
+  minutes: number;
+  clarity_rating?: number;
+  pace_rating?: number;
+  note?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CreateSpeechPracticeSession = Omit<
+  SpeechPracticeSession,
+  'id' | 'user_id' | 'created_at' | 'updated_at'
+>;
