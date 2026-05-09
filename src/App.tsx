@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -12,6 +13,7 @@ import BodyMetricsPage  from '@/pages/BodyMetricsPage';
 import SpeechPage       from '@/pages/SpeechPage';
 import SettingsPage     from '@/pages/SettingsPage';
 import BottomNav        from '@/components/BottomNav';
+import { dataRepairsService } from '@/services/dataRepairs';
 
 function LoadingScreen() {
   return (
@@ -23,6 +25,14 @@ function LoadingScreen() {
 
 function ProtectedLayout() {
   const { user, loading } = useAuth();
+  const userId = user?.id;
+  useEffect(() => {
+    if (!userId) return;
+    dataRepairsService.runOverheadPressRepair().catch(error => {
+      console.warn('Could not run overhead press data repair', error);
+    });
+  }, [userId]);
+
   if (loading) return <LoadingScreen />;
   if (!user)   return <Navigate to="/login" replace />;
   return (

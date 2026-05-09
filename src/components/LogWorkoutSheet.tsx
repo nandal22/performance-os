@@ -17,6 +17,26 @@ const DRAFT_KEY = 'perf-os-draft';
 type LastSession = { date: string; sets: { reps: number; weight: number; set_number: number }[] } | null;
 type LoadMode = 'total' | 'dumbbell_pair' | 'barbell_plates' | 'bodyweight';
 
+const LOAD_MODE_OPTIONS: Array<{ value: LoadMode; label: string; detail: string }> = [
+  { value: 'total', label: 'Total kg', detail: 'Full loaded weight' },
+  { value: 'dumbbell_pair', label: 'Dumbbells', detail: 'Enter one DB' },
+  { value: 'barbell_plates', label: 'Barbell', detail: 'Per side + bar' },
+  { value: 'bodyweight', label: 'Bodyweight', detail: 'BW plus added' },
+];
+
+const LOAD_MODE_HELP: Record<LoadMode, string> = {
+  total: 'Enter the full weight once.',
+  dumbbell_pair: 'Enter one dumbbell weight. The set is saved as both dumbbells together.',
+  barbell_plates: 'Enter plates on one side, then the rod or bar weight below.',
+  bodyweight: 'Enter added weight only. Bodyweight percent controls the estimate.',
+};
+
+const DEFAULT_MODE_BY_EQUIPMENT: Record<string, LoadMode> = {
+  dumbbell: 'dumbbell_pair',
+  barbell: 'barbell_plates',
+  bodyweight: 'bodyweight',
+};
+
 const CARDIO_METHODS: Array<{ value: CardioMethod; label: string }> = [
   { value: 'running', label: 'Running' },
   { value: 'treadmill', label: 'Treadmill' },
@@ -116,6 +136,10 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
 
   const repsRef = useRef<HTMLInputElement>(null);
   const currentExerciseId = currentEx?.id;
+  const selectedExercise = currentExerciseId
+    ? exercises.find(exercise => exercise.id === currentExerciseId)
+    : null;
+  const selectedEquipment = selectedExercise?.equipment ?? null;
 
   // Load exercises once
   useEffect(() => {
@@ -163,6 +187,12 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
       .catch(() => setLastSession(null));
   }, [currentExerciseId]);
 
+  useEffect(() => {
+    if (!currentExerciseId || !selectedEquipment) return;
+    const nextMode = DEFAULT_MODE_BY_EQUIPMENT[selectedEquipment] ?? 'total';
+    setLoadMode(current => (current === nextMode ? current : nextMode));
+  }, [currentExerciseId, selectedEquipment]);
+
   if (!open) return null;
 
   const filteredExercises = exercises
@@ -179,6 +209,15 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
   const currentWeightValue = Math.max(0, parseFloat(currentWeight) || 0);
   const barWeightValue = Math.max(0, parseFloat(barWeight) || 0);
   const bodyFactorValue = Math.max(0, parseFloat(bodyFactor) || 0);
+  const activeLoadMode = LOAD_MODE_OPTIONS.find(option => option.value === loadMode) ?? LOAD_MODE_OPTIONS[0];
+  const weightInputLabel =
+    loadMode === 'dumbbell_pair'
+      ? 'One DB kg'
+      : loadMode === 'barbell_plates'
+        ? 'Plates / side'
+        : loadMode === 'bodyweight'
+          ? 'Added kg'
+          : 'Total kg';
 
   const buildLoad = () => {
     if (loadMode === 'dumbbell_pair') {
@@ -221,6 +260,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
       load_label: currentWeightValue > 0 ? `${currentWeightValue} kg total` : 'Bodyweight / unloaded',
     };
   };
+  const loadPreview = buildLoad();
 
   const saveDraft = (sets: LoggedSet[], t: Activity['type'], d: string) => {
     if (sets.length === 0) { localStorage.removeItem(DRAFT_KEY); return; }
@@ -703,26 +743,56 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                   )}
 
                   {/* Reps × Weight */}
-                  <div>
-                    <p className="text-xs text-muted-foreground block mb-1">Load mode</p>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {([
-                        ['total', 'Total'],
-                        ['dumbbell_pair', '2 DB'],
-                        ['barbell_plates', 'Rod'],
-                        ['bodyweight', 'BW'],
-                      ] as const).map(([mode, label]) => (
-                        <button
-                          key={mode}
-                          onClick={() => setLoadMode(mode)}
-                          className={`rounded-xl py-2 text-[11px] font-semibold transition-colors ${
-                            loadMode === mode ? 'bg-primary text-primary-foreground' : 'bg-white/5 text-muted-foreground'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
+                  <div className="rounded-2xl border border-primary/25 bg-primary/[0.08] p-3 shadow-[0_12px_30px_rgba(0,0,0,0.18)]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Weight entry</p>
+                        <p className="mt-0.5 text-sm font-semibold text-white">Choose one mode</p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-primary px-2.5 py-1 text-[11px] font-bold text-primary-foreground">
+                        {activeLoadMode.label}
+                      </span>
                     </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {LOAD_MODE_OPTIONS.map(option => {
+                        const selected = loadMode === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() => setLoadMode(option.value)}
+                            className={`min-h-[64px] rounded-xl border px-3 py-2 text-left transition-all active:scale-[0.98] ${
+                              selected
+                                ? 'border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/20'
+                                : 'border-white/10 bg-white/[0.06] text-white hover:border-white/20'
+                            }`}
+                          >
+                            <span className="block text-sm font-bold leading-tight">{option.label}</span>
+                            <span className={`mt-1 block text-[11px] leading-tight ${selected ? 'text-primary-foreground/80' : 'text-white/55'}`}>
+                              {option.detail}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <p className="mt-2 text-xs leading-snug text-white/70">
+                      {LOAD_MODE_HELP[loadMode]}
+                    </p>
+                    {selectedEquipment && (
+                      <p className="mt-1 text-[11px] text-white/45">
+                        Auto-selected from exercise type: {selectedEquipment}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-white/75">Set details</p>
+                    <span className="rounded-full bg-white/[0.06] px-2 py-1 text-[11px] font-semibold text-white/60">
+                      {activeLoadMode.label}
+                    </span>
                   </div>
 
                   <div className="flex items-end gap-2">
@@ -741,15 +811,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                     </div>
                     <p className="text-white/30 pb-3">×</p>
                     <div className="flex-1">
-                      <label className="text-xs text-muted-foreground block mb-1">
-                        {loadMode === 'dumbbell_pair'
-                          ? 'Each DB (kg)'
-                          : loadMode === 'barbell_plates'
-                            ? 'Plates/side'
-                            : loadMode === 'bodyweight'
-                              ? 'Optional kg'
-                              : 'Total kg'}
-                      </label>
+                      <label className="text-xs text-muted-foreground block mb-1">{weightInputLabel}</label>
                       <input
                         type="number"
                         inputMode="decimal"
@@ -792,7 +854,10 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
 
                   <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] px-3 py-2">
                     <p className="text-xs text-white/65">
-                      Effective load: <span className="font-semibold text-white">{Math.round(buildLoad().weight * 10) / 10} kg</span>
+                      Saved as: <span className="font-semibold text-white">{loadPreview.load_label}</span>
+                    </p>
+                    <p className="mt-1 text-xs text-white/65">
+                      Effective load: <span className="font-semibold text-white">{Math.round(loadPreview.weight * 10) / 10} kg</span>
                     </p>
                     {loadMode === 'bodyweight' && !bodyWeightKg && (
                       <p className="text-[11px] text-orange-300 mt-1">Log body weight in metrics for bodyweight calorie estimates.</p>

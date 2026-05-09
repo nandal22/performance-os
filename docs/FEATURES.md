@@ -56,7 +56,7 @@ Cardio logging supports:
 
 ## Progress
 
-- Automatically surfaces main compound movement cards such as Bench Press, Squat, Deadlift, Overhead Press, Barbell Row, Romanian Deadlift, Pull-up, Leg Press, and Hip Thrust.
+- Automatically surfaces main compound movement cards such as Bench Press, Squat, Deadlift, Dumbbell Overhead Press, Barbell Row, Romanian Deadlift, Pull-up, Leg Press, and Hip Thrust.
 - Each card shows last-session sets, max logged-weight PR, and trend versus the previous session.
 - Search any exercise to inspect recent sessions, volume, sets, and max-weight trend.
 
