@@ -12,6 +12,7 @@ export const TRACKER_TABLES = [
   { name: 'calorie_logs', label: 'Calorie logs', estimatedBytesPerRow: 700 },
   { name: 'daily_steps', label: 'Daily steps', estimatedBytesPerRow: 400 },
   { name: 'quick_foods', label: 'Quick foods', estimatedBytesPerRow: 650 },
+  { name: 'guided_workout_drafts', label: 'Guided drafts', estimatedBytesPerRow: 1800 },
 ] as const;
 
 export type TrackerTableName = (typeof TRACKER_TABLES)[number]['name'];

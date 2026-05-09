@@ -25,6 +25,7 @@ Legacy `/history` and `/goals` routes redirect to Home. Body metrics remain avai
 
 - You can select any Day 1-7, so a missed workout can be done on a later date.
 - The saved activity records the selected workout day and the actual date you performed it.
+- In-progress guided sessions auto-save to your Supabase account when reachable and fall back to same-device local resume.
 - Warm-up, workout, post-workout stretch, and recovery steps can be checked off.
 - Media mode supports still images or motion frames from Free Exercise DB.
 - Strength sets are saved to normal exercise history so Progress can reuse them.
@@ -56,7 +57,7 @@ Cardio logging supports:
 ## Progress
 
 - Automatically surfaces main compound movement cards such as Bench Press, Squat, Deadlift, Overhead Press, Barbell Row, Romanian Deadlift, Pull-up, Leg Press, and Hip Thrust.
-- Each card shows last-session sets, estimated 1RM PR, and trend versus the previous session.
+- Each card shows last-session sets, max logged-weight PR, and trend versus the previous session.
 - Search any exercise to inspect recent sessions, volume, sets, and max-weight trend.
 
 ## Database Tables

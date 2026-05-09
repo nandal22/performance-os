@@ -35,6 +35,7 @@ union all select 'body_metrics', count(*) from public.body_metrics
 union all select 'calorie_logs', count(*) from public.calorie_logs
 union all select 'daily_steps', count(*) from public.daily_steps
 union all select 'quick_foods', count(*) from public.quick_foods
+union all select 'guided_workout_drafts', count(*) from public.guided_workout_drafts
 order by rows desc;
 ```
 

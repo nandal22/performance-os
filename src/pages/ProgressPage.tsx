@@ -39,7 +39,6 @@ interface SessionStat {
 interface PR {
   weight: number;
   reps: number;
-  estimated_1rm: number;
 }
 
 interface MainLiftCard {
@@ -54,10 +53,6 @@ type StrengthSetWithActivity = StrengthSet & { activity?: { date?: string } | nu
 
 function normalize(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
-}
-
-function estimateOneRm(weight: number, reps: number) {
-  return reps > 0 ? weight * (1 + reps / 30) : weight;
 }
 
 function buildSessions(rawSets: StrengthSet[]): SessionStat[] {
@@ -93,10 +88,22 @@ function bestFromSets(rawSets: StrengthSet[]): PR | null {
   for (const set of rawSets) {
     const weight = Number(set.weight ?? 0);
     const reps = Number(set.reps ?? 0);
-    if (weight <= 0 || reps <= 0) continue;
-    const estimated = estimateOneRm(weight, reps);
-    if (!best || estimated > best.estimated_1rm) {
-      best = { weight, reps, estimated_1rm: Math.round(estimated * 10) / 10 };
+    if (weight <= 0) continue;
+    if (!best || weight > best.weight) {
+      best = { weight, reps };
+    }
+  }
+  return best;
+}
+
+function bestWeightFromSessions(sessions: SessionStat[]): PR | null {
+  let best: PR | null = null;
+  for (const session of sessions) {
+    for (const set of session.sets) {
+      if (set.weight <= 0) continue;
+      if (!best || set.weight > best.weight) {
+        best = { weight: set.weight, reps: set.reps };
+      }
     }
   }
   return best;
@@ -138,12 +145,10 @@ export default function ProgressPage() {
   const loadExerciseData = useCallback(async (exercise: Exercise) => {
     setLoadingDetail(true);
     try {
-      const [rawSets, bestSet] = await Promise.all([
-        strengthSetsService.getByExercise(exercise.id, 500),
-        strengthSetsService.getBestForExercise(exercise.id).catch(() => null),
-      ]);
-      setSessions(buildSessions(rawSets));
-      setPR(bestSet ?? bestFromSets(rawSets));
+      const rawSets = await strengthSetsService.getByExercise(exercise.id, 500);
+      const nextSessions = buildSessions(rawSets);
+      setSessions(nextSessions);
+      setPR(bestWeightFromSessions(nextSessions) ?? bestFromSets(rawSets));
     } catch {
       toast.error('Failed to load progress');
     } finally {
@@ -175,15 +180,12 @@ export default function ProgressPage() {
           .filter((exercise): exercise is Exercise => Boolean(exercise));
 
         const cards = await Promise.all(matched.map(async exercise => {
-          const [rawSets, bestSet] = await Promise.all([
-            strengthSetsService.getByExercise(exercise.id, 500).catch(() => []),
-            strengthSetsService.getBestForExercise(exercise.id).catch(() => null),
-          ]);
+          const rawSets = await strengthSetsService.getByExercise(exercise.id, 500).catch(() => []);
           const liftSessions = buildSessions(rawSets);
           return {
             exercise,
             sessions: liftSessions,
-            pr: bestSet ?? bestFromSets(rawSets),
+            pr: bestWeightFromSessions(liftSessions) ?? bestFromSets(rawSets),
             last: liftSessions.length ? liftSessions[liftSessions.length - 1] : null,
             previous: liftSessions.length > 1 ? liftSessions[liftSessions.length - 2] : null,
           };
@@ -282,11 +284,14 @@ export default function ProgressPage() {
                           </div>
 
                           <div className="text-right">
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">PR</p>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Max kg PR</p>
                             <p className="text-lg font-bold text-white nums">
-                              {card.pr ? Math.round(card.pr.estimated_1rm) : '--'}
+                              {card.pr ? card.pr.weight : '--'}
                               <span className="text-[11px] font-normal text-white/40 ml-0.5">kg</span>
                             </p>
+                            {card.pr?.reps ? (
+                              <p className="text-[10px] text-muted-foreground nums">{card.pr.reps} reps</p>
+                            ) : null}
                           </div>
                         </div>
 
@@ -335,10 +340,10 @@ export default function ProgressPage() {
                 <button
                   key={exercise.id}
                   onClick={() => { setSelectedEx(exercise); setSearch(''); }}
-                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white/[0.06] text-left transition-colors"
+                  className="w-full grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.06] text-left transition-colors"
                 >
-                  <span className="text-sm text-white">{exercise.name}</span>
-                  <span className="text-[11px] text-muted-foreground capitalize">{exercise.category}</span>
+                  <span className="text-sm text-white truncate">{exercise.name}</span>
+                  <span className="text-[11px] text-muted-foreground capitalize flex-shrink-0">{exercise.category}</span>
                 </button>
               )) : (
                 <div className="py-5 text-center">
@@ -373,7 +378,7 @@ export default function ProgressPage() {
                     { label: 'Sessions', value: sessions.length },
                     { label: 'Sets', value: totalSets },
                     { label: 'Volume', value: totalVolume.toLocaleString() },
-                    { label: 'Est 1RM', value: pr ? Math.round(pr.estimated_1rm) : '--' },
+                    { label: 'Max kg', value: pr ? pr.weight : '--' },
                   ].map(item => (
                     <div key={item.label} className="rounded-xl bg-white/[0.05] border border-white/[0.08] p-2 text-center">
                       <p className="text-base font-bold text-white nums">{item.value}</p>

@@ -3,6 +3,8 @@ import { format } from 'date-fns';
 import {
   CheckCircle2,
   Circle,
+  Cloud,
+  CloudOff,
   Dumbbell,
   ExternalLink,
   Footprints,
@@ -33,6 +35,7 @@ import { activitiesService } from '@/services/activities';
 import { exercisesService } from '@/services/exercises';
 import { strengthSetsService } from '@/services/strengthSets';
 import { bodyMetricsService } from '@/services/bodyMetrics';
+import { guidedWorkoutDraftsService } from '@/services/guidedWorkoutDrafts';
 import { calcStrengthCalories } from '@/engines/calorieEngine';
 import type { Exercise } from '@/types';
 
@@ -42,6 +45,7 @@ const MEDIA_SOURCE_URL = 'https://github.com/yuhonas/free-exercise-db';
 const MEDIA_MODE_KEY = 'perf-os-workout-media-mode';
 
 type MediaMode = 'image' | 'motion';
+type DraftStatus = 'loading' | 'account' | 'local' | 'idle';
 
 interface SetLog {
   reps: string;
@@ -113,18 +117,88 @@ function buildProgress(day: number, date: string): GuidedProgress {
   };
 }
 
+function isPlanPhase(value: unknown): value is PlanPhase {
+  return value === 'warmup' || value === 'workout' || value === 'stretch' || value === 'recovery';
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function isSetLog(value: unknown): value is SetLog {
+  if (typeof value !== 'object' || value === null) return false;
+  const set = value as Partial<SetLog>;
+  return (
+    typeof set.reps === 'string' &&
+    typeof set.weight === 'string' &&
+    typeof set.done === 'boolean'
+  );
+}
+
+function mergeProgress(day: number, date: string, value: unknown): GuidedProgress {
+  const base = buildProgress(day, date);
+  if (typeof value !== 'object' || value === null) return base;
+
+  const draft = value as Partial<GuidedProgress>;
+  const incomingSets = typeof draft.sets === 'object' && draft.sets !== null ? draft.sets : {};
+  const sets = { ...base.sets };
+
+  for (const exerciseId of Object.keys(sets)) {
+    const incoming = (incomingSets as Record<string, unknown>)[exerciseId];
+    if (Array.isArray(incoming)) {
+      sets[exerciseId] = sets[exerciseId].map((set, index) => (
+        isSetLog(incoming[index]) ? incoming[index] : set
+      ));
+    }
+  }
+
+  return {
+    ...base,
+    phase: isPlanPhase(draft.phase) ? draft.phase : base.phase,
+    warmup: stringArray(draft.warmup),
+    stretch: stringArray(draft.stretch),
+    recovery: stringArray(draft.recovery),
+    sets,
+    notes: typeof draft.notes === 'string' ? draft.notes : '',
+    duration: typeof draft.duration === 'string' ? draft.duration : '',
+    savedAt: typeof draft.savedAt === 'number' ? draft.savedAt : Date.now(),
+  };
+}
+
+function hasProgress(progress: GuidedProgress) {
+  return (
+    progress.warmup.length > 0 ||
+    progress.stretch.length > 0 ||
+    progress.recovery.length > 0 ||
+    progress.notes.trim().length > 0 ||
+    progress.duration.trim().length > 0 ||
+    Object.values(progress.sets).some(sets =>
+      sets.some(set => set.done || set.reps.trim().length > 0 || set.weight.trim().length > 0),
+    )
+  );
+}
+
 function readProgress(day: number, date: string): GuidedProgress | null {
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as GuidedProgress;
+    const parsedRaw = JSON.parse(raw) as Partial<GuidedProgress>;
+    if (parsedRaw.day !== day || parsedRaw.date !== date) return null;
+    const parsed = mergeProgress(day, date, parsedRaw);
     const fresh = Date.now() - parsed.savedAt < 36 * 60 * 60 * 1000;
-    if (!fresh || parsed.day !== day || parsed.date !== date) return null;
+    if (!fresh) return null;
     return parsed;
   } catch {
     localStorage.removeItem(DRAFT_KEY);
     return null;
   }
+}
+
+function draftStatusText(status: DraftStatus) {
+  if (status === 'loading') return 'Checking saved progress';
+  if (status === 'account') return 'Saved to account';
+  if (status === 'local') return 'Saved on this device';
+  return 'Ready to start';
 }
 
 function parsePositive(value: string) {
@@ -289,6 +363,8 @@ export default function WorkoutPlanPage() {
   const [saving, setSaving] = useState(false);
   const [mediaMode, setMediaMode] = useState<MediaMode>(readMediaMode);
   const [bodyWeightKg, setBodyWeightKg] = useState<number | null>(null);
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftStatus, setDraftStatus] = useState<DraftStatus>('loading');
 
   const planDay = useMemo(
     () => workoutPlan.find(item => item.day === selectedDay) ?? workoutPlan[0],
@@ -297,12 +373,54 @@ export default function WorkoutPlanPage() {
   const reliability = useWorkoutReliability(true, `${date}-day-${planDay.day}`);
 
   useEffect(() => {
-    setProgress(readProgress(selectedDay, date) ?? buildProgress(selectedDay, date));
+    let cancelled = false;
+    const localProgress = readProgress(selectedDay, date) ?? buildProgress(selectedDay, date);
+
+    setDraftReady(false);
+    setDraftStatus('loading');
+    setProgress(localProgress);
+
+    guidedWorkoutDraftsService.get<GuidedProgress>(date, selectedDay)
+      .then(remote => {
+        if (cancelled) return;
+        if (remote) {
+          setProgress(mergeProgress(selectedDay, date, remote.progress));
+          setDraftStatus('account');
+          return;
+        }
+        setDraftStatus(hasProgress(localProgress) ? 'local' : 'idle');
+      })
+      .catch(() => {
+        if (!cancelled) setDraftStatus(hasProgress(localProgress) ? 'local' : 'idle');
+      })
+      .finally(() => {
+        if (!cancelled) setDraftReady(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedDay, date]);
 
   useEffect(() => {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...progress, savedAt: Date.now() }));
-  }, [progress]);
+    if (!draftReady) return undefined;
+
+    const nextProgress = { ...progress, savedAt: Date.now() };
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(nextProgress));
+
+    if (!hasProgress(nextProgress)) {
+      setDraftStatus('idle');
+      return undefined;
+    }
+
+    setDraftStatus(guidedWorkoutDraftsService.getStorageMode() === 'database' ? 'account' : 'local');
+    const timeout = window.setTimeout(() => {
+      void guidedWorkoutDraftsService.upsert(date, selectedDay, nextProgress)
+        .then(saved => setDraftStatus(saved ? 'account' : 'local'));
+    }, 650);
+
+    return () => window.clearTimeout(timeout);
+  }, [date, draftReady, progress, selectedDay]);
 
   useEffect(() => {
     localStorage.setItem(MEDIA_MODE_KEY, mediaMode);
@@ -337,6 +455,7 @@ export default function WorkoutPlanPage() {
   const completedItems = progress.warmup.length + completedSets + progress.stretch.length + progress.recovery.length;
   const totalItems = planDay.warmup.length + totalSets + planDay.stretch.length + recoveryItems.length;
   const completionPct = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+  const DraftIcon = draftStatus === 'local' ? CloudOff : Cloud;
 
   const phaseTabs = useMemo<PhaseTab[]>(() => {
     return [
@@ -394,6 +513,9 @@ export default function WorkoutPlanPage() {
 
   const resetDay = () => {
     localStorage.removeItem(DRAFT_KEY);
+    void guidedWorkoutDraftsService.remove(date, planDay.day).then(saved => {
+      setDraftStatus(saved ? 'idle' : 'local');
+    });
     setProgress(buildProgress(planDay.day, date));
   };
 
@@ -496,7 +618,9 @@ export default function WorkoutPlanPage() {
       }
 
       localStorage.removeItem(DRAFT_KEY);
+      await guidedWorkoutDraftsService.remove(date, planDay.day).catch(() => false);
       setProgress(buildProgress(planDay.day, date));
+      setDraftStatus('idle');
       toast.success(`${planDay.title} saved`);
     } catch {
       toast.error('Failed to save guided workout');
@@ -631,6 +755,23 @@ export default function WorkoutPlanPage() {
               </p>
             </div>
           </div>
+        </div>
+
+        <div className="rounded-2xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <DraftIcon className={`w-4 h-4 flex-shrink-0 ${
+              draftStatus === 'account' ? 'text-emerald-300' : draftStatus === 'local' ? 'text-orange-300' : 'text-white/35'
+            }`} />
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-white">Guided progress</p>
+              <p className="text-[11px] text-muted-foreground truncate">{draftStatusText(draftStatus)}</p>
+            </div>
+          </div>
+          {hasProgress(progress) && (
+            <span className="rounded-xl bg-primary/10 border border-primary/20 px-2.5 py-1 text-[11px] font-semibold text-primary nums">
+              {completionPct}%
+            </span>
+          )}
         </div>
 
         <div className="grid grid-cols-3 gap-2">
