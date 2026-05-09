@@ -296,8 +296,8 @@ export default function ProgressPage() {
                         </div>
 
                         {data.length > 1 && (
-                          <div className="h-10 mt-2">
-                            <ResponsiveContainer width="100%" height="100%">
+                          <div className="h-10 min-w-0 mt-2">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                               <LineChart data={data}>
                                 <Line
                                   type="monotone"
@@ -395,7 +395,7 @@ export default function ProgressPage() {
               ) : (
                 <>
                   {lastSession && (
-                    <div className="rounded-2xl glass p-4">
+                    <div className="rounded-2xl glass p-4 min-w-0">
                       <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-3">
                         Last Session · {format(new Date(lastSession.date + 'T12:00:00'), 'EEE, MMM d')}
                       </p>
@@ -414,7 +414,7 @@ export default function ProgressPage() {
                       <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-3">
                         Max Weight Trend
                       </p>
-                      <ResponsiveContainer width="100%" height={180}>
+                      <ResponsiveContainer width="100%" height={180} minWidth={0}>
                         <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
                           <Line
                             type="monotone"
