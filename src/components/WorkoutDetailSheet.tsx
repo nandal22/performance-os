@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { X, Trash2, CheckCircle2, CalendarCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import type { ActivityWithSets, StrengthSetWithExercise } from '@/types';
+import type { ActivityWithSets, CardioCalorieSource, CardioMethod, StrengthSetWithExercise } from '@/types';
 import { activitiesService } from '@/services/activities';
 
 interface Props {
@@ -23,10 +23,43 @@ interface GuidedMetrics {
     stretch?: string[];
     strengthSets?: unknown[];
   };
+  calorieEstimate?: {
+    calories?: number;
+    met?: number;
+    method?: string;
+    source?: CardioCalorieSource;
+    machineCalories?: number | null;
+    estimatedCalories?: number | null;
+    totalVolumeKg?: number;
+  } | null;
+  cardio?: {
+    method?: CardioMethod;
+    methodLabel?: string;
+    distanceKm?: number | null;
+    avgHeartRate?: number | null;
+    bodyWeightKg?: number | null;
+  };
+  strengthLoad?: {
+    sets?: Array<{
+      set?: number;
+      label?: string;
+      effectiveWeight?: number;
+    }>;
+  };
 }
 
 const typeIcon: Record<string, string> = {
   strength: '💪', cardio: '🏃', sport: '⚽', mobility: '🧘', custom: '⚡',
+};
+
+const CARDIO_METHOD_LABELS: Record<CardioMethod, string> = {
+  running: 'Running',
+  treadmill: 'Treadmill',
+  stair_machine: 'Stair machine',
+  elliptical: 'Elliptical',
+  cycling_bike: 'Cycling / bike',
+  rowing: 'Rowing',
+  other_machine: 'Other machine',
 };
 
 export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: Props) {
@@ -63,9 +96,17 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
   }
 
   const totalVolume = sets.reduce((sum, s) => sum + (s.volume || 0), 0);
-  const guided = activity?.structured_metrics?.guided_plan
-    ? activity.structured_metrics as GuidedMetrics
-    : null;
+  const metrics = (activity?.structured_metrics ?? {}) as GuidedMetrics;
+  const guided = metrics.guided_plan ? metrics : null;
+  const calorieEstimate = metrics.calorieEstimate;
+  const cardioMethod = metrics.cardio?.method;
+  const cardioMethodLabel = metrics.cardio?.methodLabel
+    ?? (cardioMethod ? CARDIO_METHOD_LABELS[cardioMethod] : 'Cardio');
+  const cardioCalorieSource = calorieEstimate?.source
+    ?? (activity?.cardio_metrics?.calories != null ? 'machine' : undefined);
+  const cardioCalories = calorieEstimate?.calories ?? activity?.cardio_metrics?.calories;
+  const loadDetails = metrics.strengthLoad?.sets ?? [];
+  const getLoadLabel = (setNumber: number) => loadDetails.find(item => item.set === setNumber)?.label;
 
   const handleDelete = async () => {
     if (!confirmDelete) { setConfirmDelete(true); return; }
@@ -123,7 +164,7 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
             <>
               {/* Stats summary */}
               {activity.type === 'strength' && sets.length > 0 && (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-center">
                     <p className="text-xl font-bold text-white">{sets.length}</p>
                     <p className="text-xs text-muted-foreground">Sets</p>
@@ -132,13 +173,30 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
                     <p className="text-xl font-bold text-white">{Math.round(totalVolume).toLocaleString()}</p>
                     <p className="text-xs text-muted-foreground">kg total vol.</p>
                   </div>
+                  <div className="rounded-xl bg-orange-400/10 border border-orange-400/20 p-3 text-center">
+                    <p className="text-xl font-bold text-white">{Math.round(calorieEstimate?.calories ?? 0)}</p>
+                    <p className="text-xs text-muted-foreground">kcal est.</p>
+                  </div>
                 </div>
               )}
 
               {/* Cardio metrics */}
               {activity.cardio_metrics && (
                 <div className="rounded-xl bg-white/5 border border-white/10 p-4">
-                  <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">Cardio</p>
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-widest text-muted-foreground">Cardio</p>
+                      <p className="text-sm font-semibold text-white mt-1">{cardioMethodLabel}</p>
+                    </div>
+                    {cardioCalories != null && (
+                      <div className="text-right">
+                        <p className="text-lg font-bold text-white">{cardioCalories}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {cardioCalorieSource === 'estimated' ? 'kcal est.' : 'machine kcal'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                   <div className="grid grid-cols-3 gap-3 text-center">
                     {activity.cardio_metrics.distance != null && (
                       <div>
@@ -152,7 +210,7 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
                         <p className="text-xs text-muted-foreground">avg BPM</p>
                       </div>
                     )}
-                    {activity.cardio_metrics.calories != null && (
+                    {activity.cardio_metrics.calories != null && cardioCalories == null && (
                       <div>
                         <p className="text-lg font-bold text-white">{activity.cardio_metrics.calories}</p>
                         <p className="text-xs text-muted-foreground">kcal</p>
@@ -212,6 +270,9 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
                           <> × <span className="font-semibold">{s.weight} kg</span></>
                         )}
                       </span>
+                      {getLoadLabel(s.set_number) && (
+                        <span className="text-[10px] text-muted-foreground max-w-[92px] text-right">{getLoadLabel(s.set_number)}</span>
+                      )}
                       {s.rpe != null && (
                         <span className="text-xs text-muted-foreground">RPE {s.rpe}</span>
                       )}

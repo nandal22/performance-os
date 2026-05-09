@@ -7,9 +7,7 @@ import LoginPage        from '@/pages/LoginPage';
 import DashboardPage    from '@/pages/DashboardPage';
 import WorkoutPlanPage  from '@/pages/WorkoutPlanPage';
 import CaloriesPage     from '@/pages/CaloriesPage';
-import HistoryPage      from '@/pages/HistoryPage';
 import ProgressPage     from '@/pages/ProgressPage';
-import GoalsPage        from '@/pages/GoalsPage';
 import BodyMetricsPage  from '@/pages/BodyMetricsPage';
 import SettingsPage     from '@/pages/SettingsPage';
 import BottomNav        from '@/components/BottomNav';
@@ -54,11 +52,13 @@ export default function App() {
           <Route path="/"          element={<DashboardPage />} />
           <Route path="/plan"     element={<WorkoutPlanPage />} />
           <Route path="/calories" element={<CaloriesPage />}    />
-          <Route path="/history"  element={<HistoryPage />}     />
           <Route path="/progress" element={<ProgressPage />}   />
-          <Route path="/goals"    element={<GoalsPage />}       />
           <Route path="/body"     element={<BodyMetricsPage />} />
           <Route path="/settings" element={<SettingsPage />}    />
+          <Route path="/history"  element={<Navigate to="/" replace />} />
+          <Route path="/goals"    element={<Navigate to="/" replace />} />
+          <Route path="/sleep"    element={<Navigate to="/" replace />} />
+          <Route path="/analytics" element={<Navigate to="/progress" replace />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import {
   Beef,
@@ -21,8 +21,9 @@ import { toast } from 'sonner';
 import { cutPhaseTargets } from '@/data/workoutPlan';
 import { estimateMeal, MEAL_ESTIMATE_EXAMPLES, type MealEstimate } from '@/engines/nutritionEstimator';
 import { toISODate } from '@/lib/utils';
-import { calorieLogsService, type CalorieLog, type MealType } from '@/services/calorieLogs';
-import { dailyStepsService } from '@/services/dailySteps';
+import { calorieLogsService, type CalorieLog, type CalorieStorageMode, type MealType } from '@/services/calorieLogs';
+import { dailyStepsService, type DailyStepsStorageMode } from '@/services/dailySteps';
+import { DEFAULT_QUICK_FOODS, quickFoodsService, type QuickFood, type QuickFoodsStorageMode } from '@/services/quickFoods';
 
 const MEALS: { value: MealType; label: string }[] = [
   { value: 'breakfast', label: 'Breakfast' },
@@ -30,16 +31,6 @@ const MEALS: { value: MealType; label: string }[] = [
   { value: 'dinner', label: 'Dinner' },
   { value: 'snack', label: 'Snack' },
 ];
-
-interface QuickFood {
-  id: string;
-  name: string;
-  meal: MealType;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-}
 
 interface QuickFoodDraft {
   id: string;
@@ -50,15 +41,6 @@ interface QuickFoodDraft {
   carbs: string;
   fat: string;
 }
-
-const QUICK_FOODS_KEY = 'perf-os-quick-foods';
-
-const DEFAULT_QUICK_FOODS: QuickFood[] = [
-  { id: 'whey-protein', name: 'Whey protein', meal: 'snack', calories: 140, protein: 24, carbs: 3, fat: 2 },
-  { id: 'chicken-rice', name: 'Chicken breast + rice', meal: 'lunch', calories: 480, protein: 45, carbs: 52, fat: 8 },
-  { id: 'eggs-toast', name: 'Eggs + toast', meal: 'breakfast', calories: 360, protein: 24, carbs: 28, fat: 16 },
-  { id: 'greek-yogurt', name: 'Greek yogurt', meal: 'snack', calories: 160, protein: 18, carbs: 16, fat: 2 },
-];
 
 const emptyForm = {
   name: '',
@@ -74,47 +56,6 @@ function clampPct(value: number, target: number) {
 
 function readNumber(value: string) {
   return Math.max(0, Number.parseFloat(value) || 0);
-}
-
-function isMealType(value: unknown): value is MealType {
-  return MEALS.some(meal => meal.value === value);
-}
-
-function sanitizeQuickFood(item: unknown, fallbackId: string): QuickFood | null {
-  if (typeof item !== 'object' || item === null) return null;
-  const food = item as Partial<QuickFood>;
-  const name = typeof food.name === 'string' ? food.name.trim() : '';
-  const calories = typeof food.calories === 'number' ? food.calories : 0;
-  if (!name || calories <= 0) return null;
-
-  return {
-    id: typeof food.id === 'string' && food.id ? food.id : fallbackId,
-    name,
-    meal: isMealType(food.meal) ? food.meal : 'snack',
-    calories,
-    protein: typeof food.protein === 'number' ? food.protein : 0,
-    carbs: typeof food.carbs === 'number' ? food.carbs : 0,
-    fat: typeof food.fat === 'number' ? food.fat : 0,
-  };
-}
-
-function readQuickFoods(): QuickFood[] {
-  try {
-    const raw = localStorage.getItem(QUICK_FOODS_KEY);
-    if (!raw) return DEFAULT_QUICK_FOODS;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return DEFAULT_QUICK_FOODS;
-    const foods = parsed
-      .map((item, index) => sanitizeQuickFood(item, `quick-food-${index}`))
-      .filter((item): item is QuickFood => Boolean(item));
-    return foods.length > 0 ? foods : DEFAULT_QUICK_FOODS;
-  } catch {
-    return DEFAULT_QUICK_FOODS;
-  }
-}
-
-function writeQuickFoods(foods: QuickFood[]) {
-  localStorage.setItem(QUICK_FOODS_KEY, JSON.stringify(foods));
 }
 
 function toQuickDraft(food: QuickFood): QuickFoodDraft {
@@ -157,6 +98,12 @@ function createQuickDraft(): QuickFoodDraft {
   };
 }
 
+function getCombinedStorageMode(
+  modes: [CalorieStorageMode, DailyStepsStorageMode, QuickFoodsStorageMode],
+) {
+  return modes.includes('local') ? 'local' : 'database';
+}
+
 function MacroStat({
   icon: Icon,
   label,
@@ -190,13 +137,42 @@ export default function CaloriesPage() {
   const [date, setDate] = useState(toISODate(new Date()));
   const [meal, setMeal] = useState<MealType>('breakfast');
   const [form, setForm] = useState(emptyForm);
-  const [logs, setLogs] = useState<CalorieLog[]>(() => calorieLogsService.getByDate());
-  const [stepsInput, setStepsInput] = useState(() => String(dailyStepsService.get()?.steps ?? ''));
-  const [quickFoods, setQuickFoods] = useState<QuickFood[]>(readQuickFoods);
+  const [logs, setLogs] = useState<CalorieLog[]>([]);
+  const [stepsInput, setStepsInput] = useState('');
+  const [quickFoods, setQuickFoods] = useState<QuickFood[]>(DEFAULT_QUICK_FOODS);
   const [editingQuick, setEditingQuick] = useState(false);
-  const [quickDrafts, setQuickDrafts] = useState<QuickFoodDraft[]>(() => readQuickFoods().map(toQuickDraft));
+  const [quickDrafts, setQuickDrafts] = useState<QuickFoodDraft[]>(() => DEFAULT_QUICK_FOODS.map(toQuickDraft));
   const [estimateInput, setEstimateInput] = useState('');
   const [mealEstimate, setMealEstimate] = useState<MealEstimate | null>(null);
+  const [loadingData, setLoadingData] = useState(true);
+  const [storageMode, setStorageMode] = useState<'database' | 'local'>('database');
+
+  const loadData = useCallback(async (nextDate: string) => {
+    setLoadingData(true);
+    try {
+      const [nextLogs, nextSteps, nextFoods] = await Promise.all([
+        calorieLogsService.getByDate(nextDate),
+        dailyStepsService.get(nextDate),
+        quickFoodsService.getAll(),
+      ]);
+
+      setLogs(nextLogs);
+      setStepsInput(nextSteps ? String(nextSteps.steps) : '');
+      setQuickFoods(nextFoods);
+      if (!editingQuick) setQuickDrafts(nextFoods.map(toQuickDraft));
+    } finally {
+      setStorageMode(getCombinedStorageMode([
+        calorieLogsService.getStorageMode(),
+        dailyStepsService.getStorageMode(),
+        quickFoodsService.getStorageMode(),
+      ]));
+      setLoadingData(false);
+    }
+  }, [editingQuick]);
+
+  useEffect(() => {
+    void loadData(date);
+  }, [date, loadData]);
 
   const summary = useMemo(() => (
     logs.reduce(
@@ -216,18 +192,13 @@ export default function CaloriesPage() {
   const steps = Math.round(readNumber(stepsInput));
   const stepsPct = Math.min(100, (steps / 10000) * 100);
   const stepsStatus = steps >= 10000 ? 'Top range' : steps >= 8000 ? 'On track' : `${Math.max(0, 8000 - steps).toLocaleString()} to 8k`;
-
-  const refresh = (nextDate = date) => {
-    setLogs(calorieLogsService.getByDate(nextDate));
-  };
+  const storageStatus = storageMode === 'database' ? 'Synced to account' : 'Local backup';
 
   const changeDate = (nextDate: string) => {
     setDate(nextDate);
-    refresh(nextDate);
-    setStepsInput(String(dailyStepsService.get(nextDate)?.steps ?? ''));
   };
 
-  const addEntry = (preset?: QuickFood) => {
+  const addEntry = async (preset?: QuickFood) => {
     const input = preset ?? {
       name: form.name.trim(),
       meal,
@@ -240,7 +211,7 @@ export default function CaloriesPage() {
     if (!input.name) return toast.error('Enter food name');
     if (input.calories <= 0) return toast.error('Enter calories');
 
-    calorieLogsService.create({
+    await calorieLogsService.create({
       date,
       meal: input.meal,
       name: input.name,
@@ -251,7 +222,7 @@ export default function CaloriesPage() {
     });
     setForm(emptyForm);
     setMeal(input.meal);
-    refresh();
+    await loadData(date);
     toast.success(`${input.name} logged`);
   };
 
@@ -263,13 +234,13 @@ export default function CaloriesPage() {
     }
   };
 
-  const logMealEstimate = () => {
+  const logMealEstimate = async () => {
     if (!mealEstimate || mealEstimate.items.length === 0 || mealEstimate.totals.calories <= 0) {
       return toast.error('Estimate a meal first');
     }
 
     const name = mealEstimate.items.map(item => item.label).join(' + ');
-    calorieLogsService.create({
+    await calorieLogsService.create({
       date,
       meal,
       name: name.length > 90 ? `${name.slice(0, 87)}...` : name,
@@ -278,14 +249,38 @@ export default function CaloriesPage() {
       carbs: mealEstimate.totals.carbs,
       fat: mealEstimate.totals.fat,
     });
-    refresh();
+    await loadData(date);
     toast.success('Meal estimate logged');
   };
 
-  const saveSteps = () => {
+  const logRawMealNote = async () => {
+    const rawText = estimateInput.trim();
+    if (!rawText) return toast.error('Enter what you ate');
+
+    await calorieLogsService.create({
+      date,
+      meal,
+      name: rawText.length > 120 ? `${rawText.slice(0, 117)}...` : rawText,
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+    });
+    setEstimateInput('');
+    setMealEstimate(null);
+    await loadData(date);
+    toast.success('Meal note saved');
+  };
+
+  const saveSteps = async () => {
     if (steps <= 0) return toast.error('Enter daily steps');
-    dailyStepsService.upsert(date, steps);
+    await dailyStepsService.upsert(date, steps);
     setStepsInput(String(steps));
+    setStorageMode(getCombinedStorageMode([
+      calorieLogsService.getStorageMode(),
+      dailyStepsService.getStorageMode(),
+      quickFoodsService.getStorageMode(),
+    ]));
     toast.success('Steps saved');
   };
 
@@ -303,23 +298,28 @@ export default function CaloriesPage() {
     setQuickDrafts(prev => prev.map(food => (food.id === id ? { ...food, ...patch } : food)));
   };
 
-  const saveQuickDrafts = () => {
+  const saveQuickDrafts = async () => {
     const nextFoods = quickDrafts
       .map(fromQuickDraft)
       .filter((food): food is QuickFood => Boolean(food));
 
     if (nextFoods.length === 0) return toast.error('Keep at least one quick card');
 
-    setQuickFoods(nextFoods);
-    writeQuickFoods(nextFoods);
-    setQuickDrafts(nextFoods.map(toQuickDraft));
+    const savedFoods = await quickFoodsService.saveAll(nextFoods);
+    setQuickFoods(savedFoods);
+    setQuickDrafts(savedFoods.map(toQuickDraft));
     setEditingQuick(false);
+    setStorageMode(getCombinedStorageMode([
+      calorieLogsService.getStorageMode(),
+      dailyStepsService.getStorageMode(),
+      quickFoodsService.getStorageMode(),
+    ]));
     toast.success('Quick cards saved');
   };
 
-  const deleteEntry = (id: string) => {
-    calorieLogsService.delete(id);
-    refresh();
+  const deleteEntry = async (id: string) => {
+    await calorieLogsService.delete(id);
+    await loadData(date);
   };
 
   return (
@@ -329,6 +329,9 @@ export default function CaloriesPage() {
           <div>
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-0.5">Cut phase</p>
             <h1 className="text-xl font-bold text-white tracking-tight">Calories</h1>
+            <p className={`mt-0.5 text-[11px] ${storageMode === 'database' ? 'text-emerald-300' : 'text-orange-300'}`}>
+              {loadingData ? 'Syncing...' : storageStatus}
+            </p>
           </div>
           <input
             type="date"
@@ -507,7 +510,7 @@ export default function CaloriesPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-[1fr_auto] gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => runMealEstimate()}
               className="h-11 rounded-xl bg-sky-400/15 border border-sky-400/25 text-sky-100 text-sm font-semibold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
@@ -521,6 +524,13 @@ export default function CaloriesPage() {
             >
               <Plus className="w-4 h-4" />
               Log
+            </button>
+            <button
+              onClick={logRawMealNote}
+              className="h-11 px-3 rounded-xl bg-white/[0.05] border border-white/[0.1] text-muted-foreground text-sm font-semibold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+            >
+              <Pencil className="w-4 h-4" />
+              Note
             </button>
           </div>
         </section>
@@ -718,7 +728,9 @@ export default function CaloriesPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-white truncate">{log.name}</p>
                       <p className="text-[11px] text-muted-foreground capitalize nums">
-                        {log.meal} | {log.calories} kcal | P {log.protein}g | C {log.carbs}g | F {log.fat}g
+                        {log.calories > 0
+                          ? `${log.meal} | ${log.calories} kcal | P ${log.protein}g | C ${log.carbs}g | F ${log.fat}g`
+                          : `${log.meal} | Needs calories/macros`}
                       </p>
                     </div>
                     <button

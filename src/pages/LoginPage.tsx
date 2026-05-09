@@ -13,31 +13,28 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background px-6">
       <div className="w-full max-w-sm text-center space-y-8">
-        {/* Logo */}
         <div className="space-y-2">
           <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
-            <span className="text-3xl">⚡</span>
+            <span className="text-3xl">PO</span>
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-white">Performance OS</h1>
           <p className="text-sm text-muted-foreground">Your personal fitness intelligence system</p>
         </div>
 
-        {/* Features */}
         <div className="text-left space-y-3 py-4">
           {[
-            ['💪', 'Strength & cardio tracking'],
-            ['📊', 'Analytics — PRs, 1RM, training load'],
-            ['🎯', 'Goal engine with predictions'],
-            ['📈', 'Body composition trends'],
+            ['Lift', 'Strength and cardio tracking'],
+            ['Plan', 'Guided workout logging'],
+            ['Food', 'Calories, macros, quick foods, and steps'],
+            ['Trend', 'Compound lift progress cards'],
           ].map(([icon, label]) => (
             <div key={label} className="flex items-center gap-3 text-sm text-muted-foreground">
-              <span className="text-base">{icon}</span>
+              <span className="w-12 text-xs font-semibold text-primary uppercase">{icon}</span>
               <span>{label}</span>
             </div>
           ))}
         </div>
 
-        {/* Sign in */}
         <button
           onClick={handleLogin}
           className="w-full h-12 rounded-xl bg-white text-gray-900 font-semibold text-sm flex items-center justify-center gap-3 hover:bg-gray-100 transition-colors"

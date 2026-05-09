@@ -1,15 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Clock, TrendingUp, Target, Scale, Settings, Dumbbell, Flame } from 'lucide-react';
+import { Home, TrendingUp, Dumbbell, Flame, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const TABS = [
   { path: '/',          icon: Home,       label: 'Home'     },
   { path: '/plan',      icon: Dumbbell,   label: 'Plan'     },
   { path: '/calories',  icon: Flame,      label: 'Food'     },
-  { path: '/history',   icon: Clock,      label: 'History'  },
   { path: '/progress',  icon: TrendingUp, label: 'Progress' },
-  { path: '/goals',     icon: Target,     label: 'Goals'    },
-  { path: '/body',      icon: Scale,      label: 'Body'     },
   { path: '/settings',  icon: Settings,   label: 'Settings' },
 ] as const;
 

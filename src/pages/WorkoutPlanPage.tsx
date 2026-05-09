@@ -32,6 +32,8 @@ import { useWorkoutReliability } from '@/hooks/useWorkoutReliability';
 import { activitiesService } from '@/services/activities';
 import { exercisesService } from '@/services/exercises';
 import { strengthSetsService } from '@/services/strengthSets';
+import { bodyMetricsService } from '@/services/bodyMetrics';
+import { calcStrengthCalories } from '@/engines/calorieEngine';
 import type { Exercise } from '@/types';
 
 const DRAFT_KEY = 'perf-os-guided-plan-draft';
@@ -286,6 +288,7 @@ export default function WorkoutPlanPage() {
   const [progress, setProgress] = useState<GuidedProgress>(() => readProgress(suggestedDay.day, toISODate(new Date())) ?? buildProgress(suggestedDay.day, toISODate(new Date())));
   const [saving, setSaving] = useState(false);
   const [mediaMode, setMediaMode] = useState<MediaMode>(readMediaMode);
+  const [bodyWeightKg, setBodyWeightKg] = useState<number | null>(null);
 
   const planDay = useMemo(
     () => workoutPlan.find(item => item.day === selectedDay) ?? workoutPlan[0],
@@ -305,6 +308,12 @@ export default function WorkoutPlanPage() {
     localStorage.setItem(MEDIA_MODE_KEY, mediaMode);
   }, [mediaMode]);
 
+  useEffect(() => {
+    bodyMetricsService.getLatestProfile()
+      .then(profile => setBodyWeightKg(profile.weight))
+      .catch(() => setBodyWeightKg(null));
+  }, []);
+
   const loggedRows = useMemo<LoggedSetRow[]>(() => {
     return planDay.workout.flatMap(exercise =>
       (progress.sets[exercise.id] ?? [])
@@ -315,6 +324,12 @@ export default function WorkoutPlanPage() {
         }),
     );
   }, [planDay.workout, progress.sets]);
+  const strengthCalories = bodyWeightKg && loggedRows.length > 0
+    ? calcStrengthCalories({
+        sets: loggedRows.map(row => ({ reps: row.reps, weight: row.weight })),
+        duration: progress.duration ? Number.parseInt(progress.duration, 10) : undefined,
+      }, bodyWeightKg)
+    : null;
 
   const totalSets = planDay.workout.reduce((sum, exercise) => sum + exercise.sets, 0);
   const completedSets = loggedRows.length;
@@ -436,6 +451,14 @@ export default function WorkoutPlanPage() {
               unit: row.exercise.logUnit ?? 'reps',
             })),
           },
+          calorieEstimate: strengthCalories ? {
+            calories: strengthCalories.calories,
+            met: strengthCalories.met,
+            method: strengthCalories.method,
+            durationHours: strengthCalories.duration_hrs,
+            totalVolumeKg: strengthCalories.total_volume_kg ?? 0,
+            bodyWeightKg,
+          } : null,
           targets: {
             calories: `${cutPhaseTargets.caloriesMin}-${cutPhaseTargets.caloriesMax}`,
             protein: cutPhaseTargets.protein,
@@ -624,6 +647,25 @@ export default function WorkoutPlanPage() {
             <p className="text-lg font-bold text-white nums mt-1">{cutPhaseTargets.steps}</p>
           </div>
         </div>
+
+        {completedSets > 0 && (
+          <section className="rounded-2xl bg-orange-400/10 border border-orange-400/20 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-orange-200">Burn estimate</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Uses latest body weight, duration, reps, and logged load.
+                </p>
+              </div>
+              <p className="text-lg font-bold text-white nums">
+                {strengthCalories ? `${strengthCalories.calories} kcal` : '-- kcal'}
+              </p>
+            </div>
+            {!bodyWeightKg && (
+              <p className="text-[11px] text-orange-200 mt-2">Add body weight in metrics to calculate this.</p>
+            )}
+          </section>
+        )}
 
         <div className="flex gap-2 p-1 rounded-2xl bg-white/[0.035] border border-white/[0.07]">
           {phaseTabs.map(tab => (

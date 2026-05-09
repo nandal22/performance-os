@@ -2,17 +2,30 @@ import { useEffect, useRef, useState } from 'react';
 import { X, CheckCircle2, Trash2, ChevronDown, Plus, Pencil, Star, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import type { Activity, Exercise, ExerciseCategory } from '@/types';
+import type { Activity, CardioCalorieSource, CardioMethod, Exercise, ExerciseCategory } from '@/types';
 import { activitiesService } from '@/services/activities';
 import { exercisesService } from '@/services/exercises';
 import { strengthSetsService } from '@/services/strengthSets';
 import { cardioMetricsService } from '@/services/cardioMetrics';
+import { bodyMetricsService } from '@/services/bodyMetrics';
 import { toISODate } from '@/lib/utils';
+import { calcCardioCalories, calcStrengthCalories } from '@/engines/calorieEngine';
 import ExerciseProgressSheet from './ExerciseProgressSheet';
 
 const DRAFT_KEY = 'perf-os-draft';
 
 type LastSession = { date: string; sets: { reps: number; weight: number; set_number: number }[] } | null;
+type LoadMode = 'total' | 'dumbbell_pair' | 'barbell_plates' | 'bodyweight';
+
+const CARDIO_METHODS: Array<{ value: CardioMethod; label: string }> = [
+  { value: 'running', label: 'Running' },
+  { value: 'treadmill', label: 'Treadmill' },
+  { value: 'stair_machine', label: 'Stair machine' },
+  { value: 'elliptical', label: 'Elliptical' },
+  { value: 'cycling_bike', label: 'Cycling / bike' },
+  { value: 'rowing', label: 'Rowing' },
+  { value: 'other_machine', label: 'Other machine' },
+];
 
 interface LoggedSet {
   uid: string;
@@ -20,6 +33,12 @@ interface LoggedSet {
   exercise_name: string;
   reps: number;
   weight: number;
+  load_mode?: LoadMode;
+  input_weight?: number;
+  bar_weight?: number;
+  bodyweight_factor?: number;
+  bodyweight_kg?: number | null;
+  load_label?: string;
 }
 
 interface WorkoutDraft {
@@ -69,6 +88,10 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
   // Quick-add form
   const [currentReps,   setCurrentReps]   = useState('');
   const [currentWeight, setCurrentWeight] = useState('');
+  const [loadMode,      setLoadMode]      = useState<LoadMode>('total');
+  const [barWeight,     setBarWeight]     = useState('20');
+  const [bodyFactor,    setBodyFactor]    = useState('100');
+  const [bodyWeightKg,  setBodyWeightKg]  = useState<number | null>(null);
   const [justAdded,     setJustAdded]     = useState(false);
 
   // Accumulated sets
@@ -86,6 +109,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
   const [newExCategory, setNewExCategory] = useState<ExerciseCategory>('other');
 
   // Cardio
+  const [cardioMethod, setCardioMethod] = useState<CardioMethod>('running');
   const [distance, setDistance] = useState('');
   const [avgHr,    setAvgHr]    = useState('');
   const [calories, setCalories] = useState('');
@@ -98,6 +122,13 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
       exercisesService.getAll().then(setExercises).catch(() => {});
     }
   }, [open, exercises.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    bodyMetricsService.getLatestProfile()
+      .then(profile => setBodyWeightKg(profile.weight))
+      .catch(() => setBodyWeightKg(null));
+  }, [open]);
 
   // Check for a saved draft when the sheet opens
   useEffect(() => {
@@ -144,6 +175,45 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
     .slice(0, 12);
 
   const canCreateEx = exSearch.trim().length > 1 && filteredExercises.length === 0;
+  const currentWeightValue = Math.max(0, parseFloat(currentWeight) || 0);
+  const barWeightValue = Math.max(0, parseFloat(barWeight) || 0);
+  const bodyFactorValue = Math.max(0, parseFloat(bodyFactor) || 0);
+
+  const buildLoad = () => {
+    if (loadMode === 'dumbbell_pair') {
+      const effective = currentWeightValue * 2;
+      return {
+        weight: effective,
+        input_weight: currentWeightValue,
+        load_label: currentWeightValue > 0 ? `${currentWeightValue} kg x 2 DB` : 'Dumbbells',
+      };
+    }
+    if (loadMode === 'barbell_plates') {
+      const effective = currentWeightValue * 2 + barWeightValue;
+      return {
+        weight: effective,
+        input_weight: currentWeightValue,
+        bar_weight: barWeightValue,
+        load_label: `${currentWeightValue} kg/side + ${barWeightValue} kg rod`,
+      };
+    }
+    if (loadMode === 'bodyweight') {
+      const factor = bodyFactorValue / 100;
+      const effective = bodyWeightKg ? Math.round(bodyWeightKg * factor * 10) / 10 : 0;
+      return {
+        weight: effective,
+        input_weight: effective,
+        bodyweight_factor: factor,
+        bodyweight_kg: bodyWeightKg,
+        load_label: bodyWeightKg ? `${bodyFactorValue}% bodyweight (${effective} kg)` : `${bodyFactorValue}% bodyweight`,
+      };
+    }
+    return {
+      weight: currentWeightValue,
+      input_weight: currentWeightValue,
+      load_label: currentWeightValue > 0 ? `${currentWeightValue} kg total` : 'Bodyweight / unloaded',
+    };
+  };
 
   const saveDraft = (sets: LoggedSet[], t: Activity['type'], d: string) => {
     if (sets.length === 0) { localStorage.removeItem(DRAFT_KEY); return; }
@@ -166,13 +236,23 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
   const logSet = () => {
     if (!currentEx) return toast.error('Pick an exercise first');
     if (!currentReps || parseInt(currentReps) <= 0) return toast.error('Enter reps');
+    const load = buildLoad();
+    if (loadMode === 'bodyweight' && !bodyWeightKg) {
+      toast.message('Bodyweight set saved without load estimate');
+    }
 
     const newSet: LoggedSet = {
       uid:           `${Date.now()}-${Math.random()}`,
       exercise_id:   currentEx.id,
       exercise_name: currentEx.name,
       reps:          parseInt(currentReps),
-      weight:        parseFloat(currentWeight) || 0,
+      weight:        load.weight,
+      load_mode:     loadMode,
+      input_weight:  load.input_weight,
+      bar_weight:    load.bar_weight,
+      bodyweight_factor: load.bodyweight_factor,
+      bodyweight_kg: load.bodyweight_kg,
+      load_label:    load.load_label,
     };
 
     setLoggedSets(prev => {
@@ -182,7 +262,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
     });
 
     setCurrentReps('');
-    setCurrentWeight('');
+    if (loadMode !== 'barbell_plates') setCurrentWeight('');
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 900);
     setTimeout(() => repsRef.current?.focus(), 50);
@@ -264,6 +344,30 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
     }
     grouped[s.exercise_id].sets.push(s);
   }
+  const strengthCalories = type === 'strength' && bodyWeightKg
+    ? calcStrengthCalories({
+        sets: loggedSets.map(set => ({ reps: set.reps, weight: set.weight })),
+        duration: duration ? parseInt(duration, 10) : undefined,
+      }, bodyWeightKg)
+    : null;
+  const durationMins = duration ? parseInt(duration, 10) : 0;
+  const distanceKm = distance ? parseFloat(distance) : undefined;
+  const avgHeartRate = avgHr ? parseInt(avgHr, 10) : undefined;
+  const machineCalories = calories ? parseInt(calories, 10) : undefined;
+  const cardioEstimate = type === 'cardio' && durationMins > 0 && bodyWeightKg
+    ? calcCardioCalories({
+        duration: durationMins,
+        distance: distanceKm,
+        cardioMethod,
+        notes,
+      }, bodyWeightKg)
+    : null;
+  const cardioCalories = machineCalories ?? cardioEstimate?.calories;
+  const cardioCalorieSource: CardioCalorieSource = machineCalories != null
+    ? 'machine'
+    : cardioEstimate
+      ? 'estimated'
+      : 'unavailable';
 
   const resetForm = () => {
     setType('strength');
@@ -276,6 +380,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
     setCurrentReps('');
     setCurrentWeight('');
     setExSearch('');
+    setCardioMethod('running');
     setDistance('');
     setAvgHr('');
     setCalories('');
@@ -287,6 +392,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
   const handleFinish = async () => {
     if (!date) return toast.error('Please set a date');
     if (type === 'strength' && loggedSets.length === 0) return toast.error('Log at least one set');
+    if (type === 'cardio' && durationMins <= 0) return toast.error('Enter cardio duration');
 
     setSaving(true);
     try {
@@ -296,7 +402,50 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
         duration:           duration ? parseInt(duration) : undefined,
         notes:              notes || undefined,
         tags:               [],
-        structured_metrics: {},
+        structured_metrics: type === 'strength' ? {
+          calorieEstimate: strengthCalories ? {
+            calories: strengthCalories.calories,
+            met: strengthCalories.met,
+            method: strengthCalories.method,
+            durationHours: strengthCalories.duration_hrs,
+            totalVolumeKg: strengthCalories.total_volume_kg ?? 0,
+            bodyWeightKg,
+          } : null,
+          strengthLoad: {
+            bodyWeightKg,
+            sets: loggedSets.map((s, index) => ({
+              set: index + 1,
+              exerciseId: s.exercise_id,
+              exerciseName: s.exercise_name,
+              reps: s.reps,
+              effectiveWeight: s.weight,
+              mode: s.load_mode ?? 'total',
+              inputWeight: s.input_weight ?? s.weight,
+              barWeight: s.bar_weight,
+              bodyweightFactor: s.bodyweight_factor,
+              bodyweightKg: s.bodyweight_kg,
+              label: s.load_label,
+            })),
+          },
+        } : type === 'cardio' ? {
+          cardio: {
+            method: cardioMethod,
+            methodLabel: CARDIO_METHODS.find(item => item.value === cardioMethod)?.label ?? 'Cardio',
+            distanceKm: distanceKm ?? null,
+            avgHeartRate: avgHeartRate ?? null,
+            bodyWeightKg,
+          },
+          calorieEstimate: cardioCalories != null ? {
+            calories: cardioCalories,
+            source: cardioCalorieSource,
+            machineCalories: machineCalories ?? null,
+            estimatedCalories: cardioEstimate?.calories ?? null,
+            met: cardioEstimate?.met ?? null,
+            method: cardioEstimate?.method ?? null,
+            durationHours: cardioEstimate?.duration_hrs ?? durationMins / 60,
+            bodyWeightKg,
+          } : null,
+        } : {},
       });
 
       if (type === 'strength' && loggedSets.length > 0) {
@@ -311,12 +460,12 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
         );
       }
 
-      if (type === 'cardio' && (distance || avgHr || calories)) {
+      if (type === 'cardio') {
         await cardioMetricsService.create({
           activity_id:    activity.id,
-          distance:       distance  ? parseFloat(distance)  : undefined,
-          avg_heart_rate: avgHr     ? parseInt(avgHr)       : undefined,
-          calories:       calories  ? parseInt(calories)    : undefined,
+          distance:       distanceKm,
+          avg_heart_rate: avgHeartRate,
+          calories:       cardioCalories,
         });
       }
 
@@ -534,6 +683,28 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                   )}
 
                   {/* Reps × Weight */}
+                  <div>
+                    <p className="text-xs text-muted-foreground block mb-1">Load mode</p>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {([
+                        ['total', 'Total'],
+                        ['dumbbell_pair', '2 DB'],
+                        ['barbell_plates', 'Rod'],
+                        ['bodyweight', 'BW'],
+                      ] as const).map(([mode, label]) => (
+                        <button
+                          key={mode}
+                          onClick={() => setLoadMode(mode)}
+                          className={`rounded-xl py-2 text-[11px] font-semibold transition-colors ${
+                            loadMode === mode ? 'bg-primary text-primary-foreground' : 'bg-white/5 text-muted-foreground'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="flex items-end gap-2">
                     <div className="flex-1">
                       <label className="text-xs text-muted-foreground block mb-1">Reps</label>
@@ -550,7 +721,15 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                     </div>
                     <p className="text-white/30 pb-3">×</p>
                     <div className="flex-1">
-                      <label className="text-xs text-muted-foreground block mb-1">Weight (kg)</label>
+                      <label className="text-xs text-muted-foreground block mb-1">
+                        {loadMode === 'dumbbell_pair'
+                          ? 'Each DB (kg)'
+                          : loadMode === 'barbell_plates'
+                            ? 'Plates/side'
+                            : loadMode === 'bodyweight'
+                              ? 'Optional kg'
+                              : 'Total kg'}
+                      </label>
                       <input
                         type="number"
                         inputMode="decimal"
@@ -561,6 +740,43 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-lg font-bold text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 text-center"
                       />
                     </div>
+                  </div>
+
+                  {loadMode === 'barbell_plates' && (
+                    <div>
+                      <label className="text-xs text-muted-foreground block mb-1">Rod / bar weight (kg)</label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        placeholder="20"
+                        value={barWeight}
+                        onChange={e => setBarWeight(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50"
+                      />
+                    </div>
+                  )}
+
+                  {loadMode === 'bodyweight' && (
+                    <div>
+                      <label className="text-xs text-muted-foreground block mb-1">Bodyweight used (%)</label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        placeholder="100"
+                        value={bodyFactor}
+                        onChange={e => setBodyFactor(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50"
+                      />
+                    </div>
+                  )}
+
+                  <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] px-3 py-2">
+                    <p className="text-xs text-white/65">
+                      Effective load: <span className="font-semibold text-white">{Math.round(buildLoad().weight * 10) / 10} kg</span>
+                    </p>
+                    {loadMode === 'bodyweight' && !bodyWeightKg && (
+                      <p className="text-[11px] text-orange-300 mt-1">Log body weight in metrics for bodyweight calorie estimates.</p>
+                    )}
                   </div>
 
                   <button
@@ -574,6 +790,25 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                     {justAdded ? <><CheckCircle2 className="w-4 h-4" /> Set Logged!</> : '+ Log Set'}
                   </button>
                 </div>
+
+                {loggedSets.length > 0 && (
+                  <div className="rounded-2xl bg-orange-400/10 border border-orange-400/20 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold text-orange-200">Burn estimate</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Uses body weight, duration, reps, and effective load.
+                        </p>
+                      </div>
+                      <p className="text-lg font-bold text-white nums">
+                        {strengthCalories ? `${strengthCalories.calories} kcal` : '-- kcal'}
+                      </p>
+                    </div>
+                    {!bodyWeightKg && (
+                      <p className="text-[11px] text-orange-200 mt-2">Add body weight in metrics to calculate this.</p>
+                    )}
+                  </div>
+                )}
 
                 {/* Accumulated sets */}
                 {exerciseOrder.length > 0 && (
@@ -657,11 +892,29 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
             {type === 'cardio' && (
               <div className="px-4 pt-4 pb-3 space-y-3">
                 <p className="text-xs text-muted-foreground uppercase tracking-widest">Cardio Details</p>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Method</label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {CARDIO_METHODS.map(method => (
+                      <button
+                        key={method.value}
+                        onClick={() => setCardioMethod(method.value)}
+                        className={`rounded-xl px-2 py-2 text-[11px] font-semibold transition-colors ${
+                          cardioMethod === method.value
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-white/5 text-muted-foreground hover:bg-white/10'
+                        }`}
+                      >
+                        {method.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="grid grid-cols-3 gap-2">
                   {([
                     { label: 'Distance (km)', placeholder: '5.0',  value: distance,  step: '0.01', set: setDistance },
                     { label: 'Avg HR (bpm)',  placeholder: '145',  value: avgHr,     step: '1',    set: setAvgHr    },
-                    { label: 'Calories',      placeholder: '400',  value: calories,  step: '1',    set: setCalories },
+                    { label: 'Machine kcal',  placeholder: '400',  value: calories,  step: '1',    set: setCalories },
                   ] as const).map(f => (
                     <div key={f.label}>
                       <label className="text-xs text-muted-foreground block mb-1">{f.label}</label>
@@ -675,6 +928,23 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                       />
                     </div>
                   ))}
+                </div>
+                <div className="rounded-xl bg-orange-400/10 border border-orange-400/20 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold text-orange-200">Burn estimate</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {machineCalories != null
+                          ? 'Using machine calories.'
+                          : cardioEstimate
+                            ? 'Estimated from latest body weight and cardio method.'
+                            : 'Enter duration and body weight to estimate.'}
+                      </p>
+                    </div>
+                    <p className="text-lg font-bold text-white nums">
+                      {cardioCalories != null ? `${cardioCalories} kcal` : '-- kcal'}
+                    </p>
+                  </div>
                 </div>
               </div>
             )}

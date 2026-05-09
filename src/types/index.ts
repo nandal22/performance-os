@@ -6,9 +6,11 @@
 
 export type ActivityType = 'strength' | 'cardio' | 'sport' | 'mobility' | 'custom';
 
-export type Gender = 'male' | 'female';
+export type CardioMethod = 'running' | 'treadmill' | 'stair_machine' | 'elliptical' | 'cycling_bike' | 'rowing' | 'other_machine';
 
-export type GoalType = 'weight' | 'waist' | 'lift' | 'cardio_distance' | 'cardio_time' | 'body_fat';
+export type CardioCalorieSource = 'machine' | 'estimated' | 'unavailable';
+
+export type Gender = 'male' | 'female';
 
 export type ExerciseCategory = 'push' | 'pull' | 'legs' | 'core' | 'cardio' | 'mobility' | 'other';
 
@@ -86,19 +88,6 @@ export interface BodyMetric {
   created_at: string;
 }
 
-export interface Goal {
-  id: string;
-  user_id: string;
-  type: GoalType;
-  exercise_id?: string;   // for lift goals
-  target_value: number;
-  target_reps?: number;   // for lift goals: target reps (e.g. 100kg × 3)
-  target_date?: string;
-  notes?: string;         // user-visible label, e.g. "Run 40km", "Beach body"
-  is_active: boolean;
-  created_at: string;
-}
-
 // ---- Composite / View Types ----
 
 export interface StrengthSetWithExercise extends StrengthSet {
@@ -147,40 +136,10 @@ export interface WeeklyLoad {
   status: 'undertraining' | 'optimal' | 'overtraining';
 }
 
-// ---- Sleep ----
-
-export interface SleepLog {
-  id:           string;
-  user_id:      string;
-  date:         string;         // wake-up date YYYY-MM-DD
-  bedtime?:     string;         // "23:30"
-  wake_time?:   string;         // "07:00"
-  duration_hrs?: number;        // hours
-  quality?:     number;         // 1–5
-  notes?:       string;
-  created_at:   string;
-}
-
-export type CreateSleepLog = Omit<SleepLog, 'id' | 'user_id' | 'created_at'>;
-
 // ---- Forms / Input Types ----
 
 export type CreateActivity = Omit<Activity, 'id' | 'user_id' | 'created_at' | 'updated_at'>;
 export type CreateStrengthSet = Omit<StrengthSet, 'id' | 'volume' | 'created_at'>;
 export type CreateCardioMetrics = Omit<CardioMetrics, 'id' | 'created_at'>;
 export type CreateBodyMetric = Omit<BodyMetric, 'id' | 'user_id' | 'created_at'>;
-export type CreateGoal = Omit<Goal, 'id' | 'user_id' | 'created_at'>;
 export type CreateExercise = Omit<Exercise, 'id' | 'created_at'>;
-
-export interface GoalLog {
-  id: string;
-  user_id: string;
-  goal_id: string;
-  date: string;         // YYYY-MM-DD
-  value: number;        // the metric value (kg for lifts, km for distance, etc.)
-  reps?: number;        // for lift goals
-  notes?: string;
-  created_at: string;
-}
-
-export type CreateGoalLog = Omit<GoalLog, 'id' | 'user_id' | 'created_at'>;

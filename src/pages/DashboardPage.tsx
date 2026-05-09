@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { signOut } from '@/hooks/useAuth';
 import { activitiesService } from '@/services/activities';
 import { bodyMetricsService } from '@/services/bodyMetrics';
-import { calorieLogsService } from '@/services/calorieLogs';
+import { calorieLogsService, type CalorieSummary } from '@/services/calorieLogs';
 import type { Activity, BodyMetric } from '@/types';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -40,6 +40,40 @@ const fadeUp = {
   show:   { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 380, damping: 28 } },
 };
 
+interface GuidedPlanMeta {
+  plan?: { day?: number; title?: string };
+  summary?: { completedSets?: number; totalSets?: number };
+  completed?: { strengthSets?: unknown[] };
+  calorieEstimate?: { calories?: number };
+}
+
+function activityMeta(activity: Activity) {
+  const guided = activity.structured_metrics?.guided_plan as GuidedPlanMeta | undefined;
+  if (guided) {
+    const day = guided.plan?.day ? `Day ${guided.plan.day}` : 'Guided';
+    const title = guided.plan?.title ?? 'Guided workout';
+    const completedSets = guided.summary?.completedSets ?? guided.completed?.strengthSets?.length;
+    const setText = guided.summary?.totalSets
+      ? `${guided.summary.completedSets ?? 0}/${guided.summary.totalSets} sets`
+      : typeof completedSets === 'number' && completedSets > 0
+        ? `${completedSets} sets`
+      : 'Guided plan';
+    return {
+      title,
+      detail: `${day} · ${setText}`,
+      kcal: guided.calorieEstimate?.calories,
+    };
+  }
+
+  const title = activity.type.charAt(0).toUpperCase() + activity.type.slice(1);
+  const kcal = (activity.structured_metrics?.calorieEstimate as { calories?: number } | undefined)?.calories;
+  return {
+    title,
+    detail: activity.tags?.length ? activity.tags.slice(0, 2).join(' · ') : 'Custom workout',
+    kcal,
+  };
+}
+
 export default function DashboardPage() {
   const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
   const [latestMetric,     setLatestMetric]     = useState<BodyMetric | null>(null);
@@ -48,17 +82,19 @@ export default function DashboardPage() {
   const [resumingDraft,    setResumingDraft]    = useState(false);
   const [selectedId,       setSelectedId]       = useState<string | null>(null);
   const [draft,            setDraft]            = useState<DraftMeta | null>(readDraft);
+  const [calorieSummary,   setCalorieSummary]   = useState<CalorieSummary>({ calories: 0, protein: 0, carbs: 0, fat: 0 });
   const todayPlan = getSuggestedPlanDay();
-  const calorieSummary = calorieLogsService.getSummary();
 
   const load = useCallback(async () => {
     try {
-      const [activities, metrics] = await Promise.all([
-        activitiesService.getAll(5),
+      const [activities, metrics, calories] = await Promise.all([
+        activitiesService.getAll(80),
         bodyMetricsService.getAll(1),
+        calorieLogsService.getSummary(),
       ]);
       setRecentActivities(activities);
       setLatestMetric(metrics[0] ?? null);
+      setCalorieSummary(calories);
     } catch {
       toast.error('Failed to load data');
     } finally {
@@ -176,13 +212,18 @@ export default function DashboardPage() {
           </motion.div>
         )}
 
-        {/* Recent workouts */}
+        {/* Workout history */}
         <motion.div variants={fadeUp} initial="hidden" animate="show"
           style={{ transition: 'none' } as React.CSSProperties}
         >
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-3 px-0.5">
-            Recent Workouts
-          </p>
+          <div className="flex items-center justify-between mb-3 px-0.5">
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              Workout History
+            </p>
+            {recentActivities.length > 0 && (
+              <span className="text-[10px] text-muted-foreground">{recentActivities.length}</span>
+            )}
+          </div>
 
           {loading ? (
             <div className="space-y-2">
@@ -202,6 +243,7 @@ export default function DashboardPage() {
             <div className="space-y-2">
               {recentActivities.map((a, i) => {
                 const cfg = TYPE_CONFIG[a.type] ?? TYPE_CONFIG.custom;
+                const meta = activityMeta(a);
                 return (
                   <motion.button
                     key={a.id}
@@ -218,12 +260,19 @@ export default function DashboardPage() {
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-white capitalize">{a.type}</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                      <p className="text-sm font-semibold text-white truncate">{meta.title}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
                         {format(new Date(a.date + 'T12:00:00'), 'EEE, MMM d')}
                         {a.duration ? ` · ${a.duration}min` : ''}
+                        {meta.detail ? ` · ${meta.detail}` : ''}
                       </p>
                     </div>
+
+                    {typeof meta.kcal === 'number' && meta.kcal > 0 && (
+                      <span className="text-[11px] font-semibold text-orange-300 nums bg-orange-400/10 border border-orange-400/15 rounded-full px-2 py-1">
+                        {Math.round(meta.kcal)} kcal
+                      </span>
+                    )}
 
                     <ChevronRight className="w-4 h-4 text-white/20 flex-shrink-0" />
                   </motion.button>
@@ -238,8 +287,8 @@ export default function DashboardPage() {
           variants={fadeUp} initial="hidden" animate="show"
           className="rounded-2xl border border-primary/15 bg-primary/[0.04] p-4 text-center"
         >
-          <p className="text-xs text-primary font-medium mb-1">Phase 3 Active ⚡</p>
-          <p className="text-[11px] text-muted-foreground">History · Goals · Exercise Tracking</p>
+          <p className="text-xs text-primary font-medium mb-1">Tracker Mode</p>
+          <p className="text-[11px] text-muted-foreground">Guided plan · Custom workouts · Food tracking</p>
         </motion.div>
       </main>
 
