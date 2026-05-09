@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import { Check, Flame, Mic2, Save, Sparkles, TimerReset } from 'lucide-react';
+import { Check, ClipboardCheck, Flame, Mic2, Save, Sparkles, TimerReset } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { speechDrillIcons, speechDrills, speechFramework, speechPromptPool } from '@/data/speechPractice';
+import {
+  speechDrillIcons,
+  speechDrills,
+  speechFramework,
+  speechPracticeTests,
+  speechPromptPool,
+} from '@/data/speechPractice';
 import { speechPracticeService } from '@/services/speechPractice';
 import type { SpeechPracticeSession } from '@/types';
 import { getWeekStart, toISODate } from '@/lib/utils';
@@ -22,6 +28,11 @@ function isComplete(session: SpeechPracticeSession) {
 function getPromptIndex(date: string) {
   const dayNumber = Math.floor(dateFromISO(date).getTime() / 86400000);
   return dayNumber % speechPromptPool.length;
+}
+
+function getPracticeTestIndex(date: string) {
+  const dayNumber = Math.floor(dateFromISO(date).getTime() / 86400000);
+  return dayNumber % speechPracticeTests.length;
 }
 
 function getCurrentStreak(sessions: SpeechPracticeSession[], today: string) {
@@ -86,6 +97,8 @@ function RatingControl({ label, value, onChange }: {
 export default function SpeechPage() {
   const today = useMemo(() => toISODate(new Date()), []);
   const todayPrompt = speechPromptPool[getPromptIndex(today)];
+  const todayTest = speechPracticeTests[getPracticeTestIndex(today)];
+  const [selectedTestId, setSelectedTestId] = useState(todayTest.id);
   const [sessions, setSessions] = useState<SpeechPracticeSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -120,6 +133,7 @@ export default function SpeechPage() {
   const currentStreak = getCurrentStreak(sessions, today);
   const weekCount = getWeekCompletions(sessions, today);
   const recentSessions = sessions.slice(0, HISTORY_LIMIT);
+  const selectedTest = speechPracticeTests.find(test => test.id === selectedTestId) ?? todayTest;
 
   const toggleDrill = (id: string) => {
     setCompletedDrills(prev =>
@@ -244,6 +258,88 @@ export default function SpeechPage() {
                     </motion.div>
                   );
                 })}
+              </div>
+            </section>
+
+            <section className="glass rounded-2xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <ClipboardCheck className="w-4 h-4 text-primary" />
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-white">Practice Test</p>
+                  <p className="text-[11px] text-muted-foreground">Use the content below out loud</p>
+                </div>
+              </div>
+
+              <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1 mb-4">
+                {speechPracticeTests.map(test => (
+                  <motion.button
+                    key={test.id}
+                    type="button"
+                    whileTap={{ scale: 0.94 }}
+                    onClick={() => setSelectedTestId(test.id)}
+                    className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                      selectedTest.id === test.id
+                        ? 'bg-primary text-white'
+                        : 'bg-white/[0.05] text-muted-foreground border border-white/[0.08]'
+                    }`}
+                  >
+                    {test.title}
+                  </motion.button>
+                ))}
+              </div>
+
+              <div className="rounded-2xl border border-primary/20 bg-primary/[0.06] p-3.5 mb-3">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="min-w-0">
+                    <p className="text-base font-bold text-white">{selectedTest.title}</p>
+                    <p className="text-[11px] text-primary mt-0.5">
+                      {selectedTest.category} - {selectedTest.minutes} min
+                    </p>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-widest flex-shrink-0">
+                    Test
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">{selectedTest.goal}</p>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">What to do</p>
+                  <div className="space-y-1.5">
+                    {selectedTest.whatToDo.map((step, index) => (
+                      <div key={step} className="flex gap-2 text-xs leading-relaxed">
+                        <span className="text-primary font-bold nums">{index + 1}</span>
+                        <span className="text-muted-foreground">{step}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
+                    {selectedTest.contentTitle}
+                  </p>
+                  <div className="rounded-xl bg-white/[0.04] border border-white/[0.07] p-3 space-y-2">
+                    {selectedTest.content.map(item => (
+                      <p key={item} className="text-sm text-white leading-relaxed">
+                        {item}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">Self-check</p>
+                  <div className="grid gap-1.5">
+                    {selectedTest.selfCheck.map(check => (
+                      <div key={check} className="flex items-start gap-2 rounded-xl bg-white/[0.035] border border-white/[0.06] px-3 py-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-300 mt-0.5 flex-shrink-0" />
+                        <span className="text-xs text-muted-foreground leading-relaxed">{check}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </section>
 

@@ -16,6 +16,18 @@ export interface SpeechPrompt {
   starter: string;
 }
 
+export interface SpeechPracticeTest {
+  id: string;
+  title: string;
+  category: string;
+  minutes: number;
+  goal: string;
+  whatToDo: string[];
+  contentTitle: string;
+  content: string[];
+  selfCheck: string[];
+}
+
 export const speechDrills: SpeechDrill[] = [
   {
     id: 'pace-reset',
@@ -94,6 +106,150 @@ export const speechPromptPool: SpeechPrompt[] = [
     category: 'Confidence',
     setup: 'Practice a calm 30-second intro.',
     starter: 'I work on ___. Recently I have been focused on ___. I enjoy solving ___.',
+  },
+];
+
+export const speechPracticeTests: SpeechPracticeTest[] = [
+  {
+    id: 'baseline-clarity',
+    title: 'Baseline clarity test',
+    category: 'Clarity',
+    minutes: 4,
+    goal: 'Find out where you rush, drop endings, or blur words.',
+    whatToDo: [
+      'Read the passage once at normal speed.',
+      'Read it again 20% slower with pauses after full stops.',
+      'Mark yourself only on clarity, not style.',
+    ],
+    contentTitle: 'Read this out loud',
+    content: [
+      'This week I am working on a focused improvement plan. The goal is simple: speak a little slower, finish every important word, and make each point easy to follow.',
+      'When I explain something, I will start with the main idea, add the reason, give one example, and end with the next step.',
+    ],
+    selfCheck: [
+      'Did I finish words ending in t, d, s, k, and g?',
+      'Could a listener repeat my main point?',
+      'Did I pause instead of filling space?',
+    ],
+  },
+  {
+    id: 'pace-control',
+    title: 'Pace control test',
+    category: 'Pace',
+    minutes: 3,
+    goal: 'Train yourself to slow down without sounding unnatural.',
+    whatToDo: [
+      'Say one sentence per breath.',
+      'Pause for one beat at each slash.',
+      'Repeat the same content once at natural speed.',
+    ],
+    contentTitle: 'Speak with the slash pauses',
+    content: [
+      'The main issue is not speed alone / it is speed without structure.',
+      'When I pause / the listener gets time to understand / and I get time to choose better words.',
+      'My goal is not to sound slow / my goal is to sound clear and controlled.',
+    ],
+    selfCheck: [
+      'Did my sentences feel controlled?',
+      'Did I avoid rushing the last three words?',
+      'Did silence feel less awkward by the second round?',
+    ],
+  },
+  {
+    id: 'hard-word-ladder',
+    title: 'Hard word ladder',
+    category: 'Diction',
+    minutes: 3,
+    goal: 'Sharpen words that commonly get swallowed or mixed together.',
+    whatToDo: [
+      'Read each row slowly, then at normal speed.',
+      'Over-pronounce once, then speak naturally.',
+      'Keep your jaw loose and finish the final sound.',
+    ],
+    contentTitle: 'Word sets',
+    content: [
+      'specific, consistently, productivity, priority, probability',
+      'task, asked, fixed, shipped, reviewed, discussed',
+      'clarity, quality, reliability, strategy, responsibility',
+      'three things, this sprint, status update, next step',
+    ],
+    selfCheck: [
+      'Were specific and consistently separated clearly?',
+      'Did task, asked, and fixed keep their ending sounds?',
+      'Did long words stay clean instead of becoming one blur?',
+    ],
+  },
+  {
+    id: 'work-update',
+    title: 'Work update test',
+    category: 'Soft skill',
+    minutes: 5,
+    goal: 'Give a concise update that sounds prepared and confident.',
+    whatToDo: [
+      'Use the exact structure: done, doing, blocked, next.',
+      'Keep it under 45 seconds.',
+      'If you fumble, pause and restart the sentence.',
+    ],
+    contentTitle: 'Fill and speak',
+    content: [
+      'Done: I completed ___.',
+      'Doing: I am currently focused on ___.',
+      'Blocked: The only risk is ___.',
+      'Next: I will update you by ___ with ___.',
+    ],
+    selfCheck: [
+      'Was the update under 45 seconds?',
+      'Was the blocker stated without rambling?',
+      'Did I sound decisive on the next step?',
+    ],
+  },
+  {
+    id: 'filler-reset',
+    title: 'Filler reset test',
+    category: 'Fluency',
+    minutes: 4,
+    goal: 'Replace um, like, actually, and you know with clean pauses.',
+    whatToDo: [
+      'Pick one topic from the content list.',
+      'Speak for 60 seconds.',
+      'Every time a filler appears, pause and continue from the last clean word.',
+    ],
+    contentTitle: 'Choose one topic',
+    content: [
+      'Explain a feature you recently worked on.',
+      'Explain why speech clarity matters to you.',
+      'Explain one mistake you made and what you learned.',
+      'Explain a plan for tomorrow in four sentences.',
+    ],
+    selfCheck: [
+      'How many fillers did I notice?',
+      'Did I pause instead of panicking?',
+      'Did I keep the topic organized?',
+    ],
+  },
+  {
+    id: 'story-clarity',
+    title: 'Story clarity test',
+    category: 'Confidence',
+    minutes: 5,
+    goal: 'Tell a short story with a clean beginning, middle, and end.',
+    whatToDo: [
+      'Use situation, action, result, lesson.',
+      'Keep the story under 90 seconds.',
+      'Make the lesson one sentence.',
+    ],
+    contentTitle: 'Story frame',
+    content: [
+      'Situation: One challenge I faced was ___.',
+      'Action: I handled it by ___.',
+      'Result: The outcome was ___.',
+      'Lesson: Next time, I will ___.',
+    ],
+    selfCheck: [
+      'Was the story easy to follow?',
+      'Did I avoid unnecessary background?',
+      'Was the lesson clear and memorable?',
+    ],
   },
 ];
 
