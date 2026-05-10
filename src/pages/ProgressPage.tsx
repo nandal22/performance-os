@@ -13,6 +13,7 @@ const MAIN_LIFTS = [
   'Bench Press',
   'Squat',
   'Deadlift',
+  'Overhead Press',
   'Dumbbell Overhead Press',
   'Barbell Row',
   'Romanian Deadlift',

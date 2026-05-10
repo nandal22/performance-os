@@ -46,11 +46,29 @@ const MEDIA_MODE_KEY = 'perf-os-workout-media-mode';
 
 type MediaMode = 'image' | 'motion';
 type DraftStatus = 'loading' | 'account' | 'local' | 'idle';
+type LoadMode = 'total' | 'dumbbell_pair' | 'barbell_plates' | 'bodyweight';
+
+const LOAD_MODE_OPTIONS: Array<{ value: LoadMode; label: string; detail: string }> = [
+  { value: 'total', label: 'Total kg', detail: 'Full weight' },
+  { value: 'dumbbell_pair', label: 'Dumbbells', detail: 'One DB' },
+  { value: 'barbell_plates', label: 'Barbell', detail: 'Side + bar' },
+  { value: 'bodyweight', label: 'Bodyweight', detail: 'Added kg' },
+];
+
+const LOAD_MODE_HELP: Record<LoadMode, string> = {
+  total: 'Enter the full loaded weight once.',
+  dumbbell_pair: 'Enter one dumbbell weight. The app counts both dumbbells.',
+  barbell_plates: 'Enter plates on one side, then the rod or bar weight.',
+  bodyweight: 'Enter added weight only. Bodyweight percent is used for the estimate.',
+};
 
 interface SetLog {
   reps: string;
   weight: string;
   done: boolean;
+  loadMode?: LoadMode;
+  barWeight?: string;
+  bodyFactor?: string;
 }
 
 interface GuidedProgress {
@@ -71,6 +89,12 @@ interface LoggedSetRow {
   setIndex: number;
   reps: number;
   weight: number;
+  inputWeight: number;
+  loadMode: LoadMode;
+  barWeight?: number;
+  bodyweightFactor?: number;
+  bodyweightKg?: number | null;
+  loadLabel: string;
 }
 
 interface PhaseTab {
@@ -100,7 +124,7 @@ function buildProgress(day: number, date: string): GuidedProgress {
   const planDay = workoutPlan.find(item => item.day === day) ?? workoutPlan[0];
   const sets: Record<string, SetLog[]> = {};
   for (const exercise of planDay.workout) {
-    sets[exercise.id] = Array.from({ length: exercise.sets }, () => ({ reps: '', weight: '', done: false }));
+    sets[exercise.id] = Array.from({ length: exercise.sets }, () => buildSetLog(exercise));
   }
 
   return {
@@ -131,7 +155,10 @@ function isSetLog(value: unknown): value is SetLog {
   return (
     typeof set.reps === 'string' &&
     typeof set.weight === 'string' &&
-    typeof set.done === 'boolean'
+    typeof set.done === 'boolean' &&
+    (set.loadMode === undefined || isLoadMode(set.loadMode)) &&
+    (set.barWeight === undefined || typeof set.barWeight === 'string') &&
+    (set.bodyFactor === undefined || typeof set.bodyFactor === 'string')
   );
 }
 
@@ -147,7 +174,7 @@ function mergeProgress(day: number, date: string, value: unknown): GuidedProgres
     const incoming = (incomingSets as Record<string, unknown>)[exerciseId];
     if (Array.isArray(incoming)) {
       sets[exerciseId] = sets[exerciseId].map((set, index) => (
-        isSetLog(incoming[index]) ? incoming[index] : set
+        isSetLog(incoming[index]) ? { ...set, ...incoming[index] } : set
       ));
     }
   }
@@ -203,6 +230,87 @@ function draftStatusText(status: DraftStatus) {
 
 function parsePositive(value: string) {
   return Math.max(0, Number.parseFloat(value) || 0);
+}
+
+function isLoadMode(value: unknown): value is LoadMode {
+  return value === 'total' || value === 'dumbbell_pair' || value === 'barbell_plates' || value === 'bodyweight';
+}
+
+function defaultLoadModeForExercise(exercise: PlanExercise): LoadMode {
+  if (exercise.equipment === 'dumbbell') return 'dumbbell_pair';
+  if (exercise.equipment === 'barbell') return 'barbell_plates';
+  if (exercise.equipment === 'bodyweight') return 'bodyweight';
+  return 'total';
+}
+
+function buildSetLog(exercise: PlanExercise): SetLog {
+  return {
+    reps: '',
+    weight: '',
+    done: false,
+    loadMode: defaultLoadModeForExercise(exercise),
+    barWeight: exercise.equipment === 'barbell' ? '20' : '',
+    bodyFactor: exercise.equipment === 'bodyweight' ? '100' : '',
+  };
+}
+
+function buildLoad(set: SetLog, bodyWeightKg: number | null) {
+  const mode = set.loadMode ?? 'total';
+  const inputWeight = parsePositive(set.weight);
+  const barWeight = parsePositive(set.barWeight || '20');
+  const bodyFactorPercent = parsePositive(set.bodyFactor || '100') || 100;
+
+  if (mode === 'dumbbell_pair') {
+    const effectiveWeight = Math.round(inputWeight * 2 * 10) / 10;
+    return {
+      mode,
+      inputWeight,
+      effectiveWeight,
+      loadLabel: inputWeight > 0 ? `${inputWeight} kg x 2 DB` : 'Dumbbells',
+    };
+  }
+
+  if (mode === 'barbell_plates') {
+    const effectiveWeight = Math.round((inputWeight * 2 + barWeight) * 10) / 10;
+    return {
+      mode,
+      inputWeight,
+      barWeight,
+      effectiveWeight,
+      loadLabel: `${inputWeight} kg/side + ${barWeight} kg bar`,
+    };
+  }
+
+  if (mode === 'bodyweight') {
+    const bodyweightFactor = bodyFactorPercent / 100;
+    const bodyweightLoad = bodyWeightKg ? Math.round(bodyWeightKg * bodyweightFactor * 10) / 10 : 0;
+    const effectiveWeight = Math.round((bodyweightLoad + inputWeight) * 10) / 10;
+    const bodyLabel = bodyWeightKg
+      ? `${bodyFactorPercent}% bodyweight (${bodyweightLoad} kg)`
+      : `${bodyFactorPercent}% bodyweight`;
+    return {
+      mode,
+      inputWeight,
+      bodyweightFactor,
+      bodyweightKg: bodyWeightKg,
+      effectiveWeight,
+      loadLabel: inputWeight > 0 ? `${bodyLabel} + ${inputWeight} kg` : bodyLabel,
+    };
+  }
+
+  return {
+    mode,
+    inputWeight,
+    effectiveWeight: inputWeight,
+    loadLabel: inputWeight > 0 ? `${inputWeight} kg total` : 'Bodyweight / unloaded',
+  };
+}
+
+function weightInputLabel(mode: LoadMode) {
+  if (mode === 'dumbbell_pair') return 'One DB kg';
+  if (mode === 'barbell_plates') return 'Plates / side';
+  if (mode === 'bodyweight') return 'Added kg';
+  return 'Total kg';
 }
 
 function lowerRepTarget(repRange: string) {
@@ -438,10 +546,22 @@ export default function WorkoutPlanPage() {
         .flatMap((set, setIndex) => {
           const reps = parsePositive(set.reps);
           if (!set.done || reps <= 0) return [];
-          return [{ exercise, setIndex, reps, weight: parsePositive(set.weight) }];
+          const load = buildLoad(set, bodyWeightKg);
+          return [{
+            exercise,
+            setIndex,
+            reps,
+            weight: load.effectiveWeight,
+            inputWeight: load.inputWeight,
+            loadMode: load.mode,
+            barWeight: load.barWeight,
+            bodyweightFactor: load.bodyweightFactor,
+            bodyweightKg: load.bodyweightKg,
+            loadLabel: load.loadLabel,
+          }];
         }),
     );
-  }, [planDay.workout, progress.sets]);
+  }, [bodyWeightKg, planDay.workout, progress.sets]);
   const strengthCalories = bodyWeightKg && loggedRows.length > 0
     ? calcStrengthCalories({
         sets: loggedRows.map(row => ({ reps: row.reps, weight: row.weight })),
@@ -491,6 +611,16 @@ export default function WorkoutPlanPage() {
         [exerciseId]: (prev.sets[exerciseId] ?? []).map((set, setIndex) =>
           setIndex === index ? { ...set, ...patch } : set,
         ),
+      },
+    }));
+  };
+
+  const updateExerciseLoadSettings = (exerciseId: string, patch: Partial<Pick<SetLog, 'loadMode' | 'barWeight' | 'bodyFactor'>>) => {
+    setProgress(prev => ({
+      ...prev,
+      sets: {
+        ...prev.sets,
+        [exerciseId]: (prev.sets[exerciseId] ?? []).map(set => ({ ...set, ...patch, done: false })),
       },
     }));
   };
@@ -570,7 +700,30 @@ export default function WorkoutPlanPage() {
               set: row.setIndex + 1,
               reps: row.reps,
               weight: row.weight,
+              mode: row.loadMode,
+              inputWeight: row.inputWeight,
+              barWeight: row.barWeight,
+              bodyweightFactor: row.bodyweightFactor,
+              bodyweightKg: row.bodyweightKg,
+              label: row.loadLabel,
               unit: row.exercise.logUnit ?? 'reps',
+            })),
+          },
+          strengthLoad: {
+            bodyWeightKg,
+            sets: loggedRows.map((row, index) => ({
+              set: index + 1,
+              exerciseSet: row.setIndex + 1,
+              exerciseId: row.exercise.id,
+              exerciseName: row.exercise.name,
+              reps: row.reps,
+              effectiveWeight: row.weight,
+              mode: row.loadMode,
+              inputWeight: row.inputWeight,
+              barWeight: row.barWeight,
+              bodyweightFactor: row.bodyweightFactor,
+              bodyweightKg: row.bodyweightKg,
+              label: row.loadLabel,
             })),
           },
           calorieEstimate: strengthCalories ? {
@@ -861,7 +1014,13 @@ export default function WorkoutPlanPage() {
               exit={{ opacity: 0, y: -10 }}
               className="space-y-3"
             >
-              {planDay.workout.map(exercise => (
+              {planDay.workout.map(exercise => {
+                const exerciseSets = progress.sets[exercise.id] ?? [];
+                const exerciseLoadMode = exerciseSets[0]?.loadMode ?? defaultLoadModeForExercise(exercise);
+                const activeLoadMode = LOAD_MODE_OPTIONS.find(option => option.value === exerciseLoadMode) ?? LOAD_MODE_OPTIONS[0];
+                const barWeight = exerciseSets[0]?.barWeight || '20';
+                const bodyFactor = exerciseSets[0]?.bodyFactor || '100';
+                return (
                 <div key={exercise.id} className="rounded-2xl glass p-3.5 space-y-3">
                   <MediaPanel exercise={exercise} mediaMode={mediaMode} />
 
@@ -878,10 +1037,75 @@ export default function WorkoutPlanPage() {
                     <p className="text-xs text-white/58 leading-relaxed mt-2">{exercise.cue}</p>
                   </div>
 
+                  <div className="rounded-2xl border border-primary/20 bg-primary/[0.07] p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Weight entry</p>
+                        <p className="mt-0.5 text-sm font-semibold text-white">Choose how to log this exercise</p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-primary px-2.5 py-1 text-[11px] font-bold text-primary-foreground">
+                        {activeLoadMode.label}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {LOAD_MODE_OPTIONS.map(option => {
+                        const selected = exerciseLoadMode === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() => updateExerciseLoadSettings(exercise.id, { loadMode: option.value })}
+                            className={`min-h-[58px] rounded-xl border px-3 py-2 text-left transition-all active:scale-[0.98] ${
+                              selected
+                                ? 'border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/20'
+                                : 'border-white/10 bg-white/[0.06] text-white hover:border-white/20'
+                            }`}
+                          >
+                            <span className="block text-sm font-bold leading-tight">{option.label}</span>
+                            <span className={`mt-1 block text-[11px] leading-tight ${selected ? 'text-primary-foreground/80' : 'text-white/55'}`}>
+                              {option.detail}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <p className="mt-2 text-xs leading-snug text-white/70">{LOAD_MODE_HELP[exerciseLoadMode]}</p>
+
+                    {exerciseLoadMode === 'barbell_plates' && (
+                      <div className="mt-3">
+                        <label className="block text-[10px] text-muted-foreground mb-1">Rod / bar weight (kg)</label>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={barWeight}
+                          onChange={event => updateExerciseLoadSettings(exercise.id, { barWeight: event.target.value })}
+                          className="w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary/50"
+                        />
+                      </div>
+                    )}
+
+                    {exerciseLoadMode === 'bodyweight' && (
+                      <div className="mt-3">
+                        <label className="block text-[10px] text-muted-foreground mb-1">Bodyweight used (%)</label>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={bodyFactor}
+                          onChange={event => updateExerciseLoadSettings(exercise.id, { bodyFactor: event.target.value })}
+                          className="w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary/50"
+                        />
+                      </div>
+                    )}
+                  </div>
+
                   <div className="space-y-2">
-                    {(progress.sets[exercise.id] ?? []).map((set, index) => {
+                    {exerciseSets.map((set, index) => {
                       const done = set.done;
                       const repsLabel = exercise.logUnit === 'seconds' ? 'Sec' : 'Reps';
+                      const load = buildLoad(set, bodyWeightKg);
                       return (
                         <div
                           key={`${exercise.id}-${index}`}
@@ -904,7 +1128,7 @@ export default function WorkoutPlanPage() {
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] text-muted-foreground mb-1">Kg</label>
+                            <label className="block text-[10px] text-muted-foreground mb-1">{weightInputLabel(exerciseLoadMode)}</label>
                             <input
                               type="number"
                               inputMode="decimal"
@@ -912,6 +1136,7 @@ export default function WorkoutPlanPage() {
                               onChange={event => updateSet(exercise.id, index, { weight: event.target.value, done: false })}
                               className="w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-2 py-2 text-sm text-white text-center focus:outline-none focus:border-primary/50"
                             />
+                            <p className="mt-1 truncate text-[10px] text-white/45">{load.loadLabel}</p>
                           </div>
                           <button
                             onClick={() => toggleSetDone(exercise, index)}
@@ -927,7 +1152,8 @@ export default function WorkoutPlanPage() {
                     })}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </motion.section>
           )}
 

@@ -3,6 +3,7 @@ import type { Exercise } from '@/types';
 import { exercisesService } from './exercises';
 
 const OVERHEAD_REPAIR_VERSION = 'perf-os-repair-overhead-to-dumbbell-v1';
+const OVERHEAD_REPAIR_CUTOFF = '2026-05-09T14:30:00.000Z';
 const TARGET_NAME = 'Dumbbell Overhead Press';
 const SOURCE_NAMES = ['Overhead Press', 'DB Shoulder Press', 'Dumbbell Shoulder Press'];
 let overheadRepairInFlight: Promise<void> | null = null;
@@ -43,7 +44,8 @@ async function runOverheadPressRepair() {
     const { error } = await supabase
       .from('strength_sets')
       .update({ exercise_id: targetId })
-      .in('exercise_id', sourceIds);
+      .in('exercise_id', sourceIds)
+      .lte('created_at', OVERHEAD_REPAIR_CUTOFF);
     if (error) throw error;
   }
 

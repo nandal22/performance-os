@@ -235,9 +235,9 @@ export const workoutPlan: WorkoutPlanDay[] = [
       }),
       strengthExercise({
         id: 'overhead-press',
-        name: 'Dumbbell Overhead Press',
-        dbName: 'Dumbbell Overhead Press',
-        aliases: ['DB Shoulder Press', 'Dumbbell Shoulder Press'],
+        name: 'Overhead Press',
+        dbName: 'Overhead Press',
+        aliases: ['Overhead Press', 'Barbell Shoulder Press', 'Standing Military Press'],
         target: '3 x 5-6',
         sets: 3,
         repRange: '5-6',
@@ -245,8 +245,8 @@ export const workoutPlan: WorkoutPlanDay[] = [
         category: 'push',
         primaryMuscle: 'Shoulders',
         secondaryMuscles: ['Triceps'],
-        equipment: 'dumbbell',
-        media: exDbImage('Dumbbell_Shoulder_Press'),
+        equipment: 'barbell',
+        media: exDbImage('Standing_Military_Press'),
       }),
       strengthExercise({
         id: 'barbell-row',
@@ -471,7 +471,7 @@ export const workoutPlan: WorkoutPlanDay[] = [
       strengthExercise({
         id: 'db-shoulder-press',
         name: 'DB Shoulder Press',
-        dbName: 'Dumbbell Overhead Press',
+        dbName: 'DB Shoulder Press',
         aliases: ['DB Shoulder Press', 'Dumbbell Shoulder Press'],
         target: '3 x 8-10',
         sets: 3,
@@ -648,9 +648,9 @@ export const workoutPlan: WorkoutPlanDay[] = [
     workout: [
       strengthExercise({
         id: 'overhead-press-arms',
-        name: 'Dumbbell Overhead Press',
-        dbName: 'Dumbbell Overhead Press',
-        aliases: ['DB Shoulder Press', 'Dumbbell Shoulder Press'],
+        name: 'Overhead Press',
+        dbName: 'Overhead Press',
+        aliases: ['Overhead Press', 'Barbell Shoulder Press', 'Standing Military Press'],
         target: '3 x 5-6',
         sets: 3,
         repRange: '5-6',
@@ -658,8 +658,8 @@ export const workoutPlan: WorkoutPlanDay[] = [
         category: 'push',
         primaryMuscle: 'Shoulders',
         secondaryMuscles: ['Triceps'],
-        equipment: 'dumbbell',
-        media: exDbImage('Dumbbell_Shoulder_Press'),
+        equipment: 'barbell',
+        media: exDbImage('Standing_Military_Press'),
       }),
       strengthExercise({
         id: 'lateral-raises-arms',

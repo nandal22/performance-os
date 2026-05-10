@@ -30,4 +30,5 @@ source AS (
 )
 UPDATE strength_sets
 SET exercise_id = (SELECT id FROM target)
-WHERE exercise_id IN (SELECT id FROM source);
+WHERE exercise_id IN (SELECT id FROM source)
+  AND created_at <= TIMESTAMPTZ '2026-05-09T14:30:00.000Z';
