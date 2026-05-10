@@ -1109,44 +1109,50 @@ export default function WorkoutPlanPage() {
                       return (
                         <div
                           key={`${exercise.id}-${index}`}
-                          className={`grid grid-cols-[38px_minmax(0,1fr)_minmax(0,1fr)_38px] gap-2 items-center rounded-xl border p-2 ${
+                          className={`rounded-xl border p-2.5 ${
                             done ? 'border-emerald-400/20 bg-emerald-400/10' : 'border-white/[0.07] bg-white/[0.025]'
                           }`}
                         >
-                          <span className="text-xs text-muted-foreground text-center font-semibold">S{index + 1}</span>
-                          <div>
-                            <label className="block text-[10px] text-muted-foreground mb-1">{repsLabel}</label>
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              value={set.reps}
-                              onFocus={() => {
-                                if (!set.reps) fillTarget(exercise, index);
-                              }}
-                              onChange={event => updateSet(exercise.id, index, { reps: event.target.value, done: false })}
-                              className="w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-2 py-2 text-sm text-white text-center focus:outline-none focus:border-primary/50"
-                            />
+                          <div className="grid grid-cols-[34px_minmax(0,1fr)_38px] gap-2 items-end">
+                            <span className="pb-2 text-xs text-muted-foreground text-center font-semibold">S{index + 1}</span>
+                            <div className="grid grid-cols-2 gap-2 min-w-0">
+                              <div className="min-w-0">
+                                <label className="block truncate text-[10px] text-muted-foreground mb-1">{repsLabel}</label>
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  value={set.reps}
+                                  onFocus={() => {
+                                    if (!set.reps) fillTarget(exercise, index);
+                                  }}
+                                  onChange={event => updateSet(exercise.id, index, { reps: event.target.value, done: false })}
+                                  className="h-11 w-full bg-white/[0.06] border border-white/[0.1] rounded-xl px-2 text-base font-semibold text-white text-center focus:outline-none focus:border-primary/50"
+                                />
+                              </div>
+                              <div className="min-w-0">
+                                <label className="block truncate text-[10px] text-muted-foreground mb-1">{weightInputLabel(exerciseLoadMode)}</label>
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  value={set.weight}
+                                  onChange={event => updateSet(exercise.id, index, { weight: event.target.value, done: false })}
+                                  className="h-11 w-full bg-white/[0.06] border border-white/[0.1] rounded-xl px-2 text-base font-semibold text-white text-center focus:outline-none focus:border-primary/50"
+                                />
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => toggleSetDone(exercise, index)}
+                              className={`mb-0.5 w-9 h-9 rounded-xl flex items-center justify-center ${
+                                done ? 'bg-emerald-400 text-black' : 'bg-white/[0.06] text-white/30'
+                              }`}
+                              aria-label={`${done ? 'Unmark' : 'Mark'} ${exercise.name} set ${index + 1}`}
+                            >
+                              {done ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+                            </button>
                           </div>
-                          <div>
-                            <label className="block text-[10px] text-muted-foreground mb-1">{weightInputLabel(exerciseLoadMode)}</label>
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              value={set.weight}
-                              onChange={event => updateSet(exercise.id, index, { weight: event.target.value, done: false })}
-                              className="w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-2 py-2 text-sm text-white text-center focus:outline-none focus:border-primary/50"
-                            />
-                            <p className="mt-1 truncate text-[10px] text-white/45">{load.loadLabel}</p>
-                          </div>
-                          <button
-                            onClick={() => toggleSetDone(exercise, index)}
-                            className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                              done ? 'bg-emerald-400 text-black' : 'bg-white/[0.06] text-white/30'
-                            }`}
-                            aria-label={`${done ? 'Unmark' : 'Mark'} ${exercise.name} set ${index + 1}`}
-                          >
-                            {done ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
-                          </button>
+                          <p className="mt-2 ml-[42px] mr-[46px] rounded-lg bg-white/[0.04] px-2 py-1 text-center text-[11px] font-medium text-white/60">
+                            {load.loadLabel}
+                          </p>
                         </div>
                       );
                     })}
