@@ -40,7 +40,7 @@ import { calcStrengthCalories } from '@/engines/calorieEngine';
 import type { Exercise } from '@/types';
 
 const DRAFT_KEY = 'perf-os-guided-plan-draft';
-const PLAN_NAME = '5-Day Strength Workout Plan (Cut Phase)';
+const PLAN_NAME = 'Final Optimized 5-Day Plan (Squat & Deadlift Separated)';
 const MEDIA_SOURCE_URL = 'https://github.com/yuhonas/free-exercise-db';
 const MEDIA_MODE_KEY = 'perf-os-workout-media-mode';
 
