@@ -104,7 +104,14 @@ const MEDIA = {
   neckStretch: exDbImage('Side_Neck_Stretch'),
 };
 
-const UNIVERSAL_WARMUP: PlanItem[] = [
+const FIRST_LIFT_WARMUP: PlanItem = {
+  id: 'first-lift-warmup',
+  name: 'First lift warm-up sets',
+  target: '2-3 ramp sets',
+  cue: 'Start light, add load gradually, and stop before fatigue.',
+};
+
+const UPPER_STRENGTH_WARMUP: PlanItem[] = [
   {
     id: 'arm-circles',
     name: 'Arm circles',
@@ -112,6 +119,31 @@ const UNIVERSAL_WARMUP: PlanItem[] = [
     cue: 'Move from the shoulders and keep ribs stacked.',
     media: MEDIA.armCircles,
   },
+  {
+    id: 'band-pull-aparts',
+    name: 'Band pull-aparts',
+    target: '2 x 15',
+    cue: 'Pull to upper chest height and keep traps relaxed.',
+    media: MEDIA.bandPullApart,
+  },
+  {
+    id: 'scapular-pushups',
+    name: 'Scapular push-ups',
+    target: '2 x 10',
+    cue: 'Keep elbows locked and only move shoulder blades around the ribs.',
+    media: MEDIA.scapularPushups,
+  },
+  {
+    id: 'shoulder-dislocations',
+    name: 'Shoulder dislocations',
+    target: '2 x 12',
+    cue: 'Use a wide grip and stay inside a pain-free range.',
+    media: MEDIA.shoulderDislocations,
+  },
+  FIRST_LIFT_WARMUP,
+];
+
+const LOWER_SQUAT_WARMUP: PlanItem[] = [
   {
     id: 'leg-swings',
     name: 'Leg swings',
@@ -127,13 +159,6 @@ const UNIVERSAL_WARMUP: PlanItem[] = [
     media: MEDIA.hipCircles,
   },
   {
-    id: 'band-pull-aparts',
-    name: 'Band pull-aparts',
-    target: '2 x 15',
-    cue: 'Pull to upper chest height and keep traps relaxed.',
-    media: MEDIA.bandPullApart,
-  },
-  {
     id: 'bodyweight-squats',
     name: 'Bodyweight squats',
     target: '10 reps',
@@ -141,25 +166,66 @@ const UNIVERSAL_WARMUP: PlanItem[] = [
     media: MEDIA.bodyweightSquat,
   },
   {
-    id: 'first-lift-warmup',
-    name: 'First lift warm-up sets',
-    target: '2-3 ramp sets',
-    cue: 'Start light, add load gradually, and stop before fatigue.',
+    id: 'walking-lunges',
+    name: 'Walking lunges',
+    target: '10 steps',
+    cue: 'Take controlled steps and keep the front foot fully planted.',
+    media: MEDIA.walkingLunge,
   },
+  FIRST_LIFT_WARMUP,
 ];
 
-const UPPER_STRETCHES: PlanItem[] = [
-  { id: 'chest-stretch', name: 'Chest stretch', target: '30 sec each side', cue: 'Place forearm on a wall and rotate away gently.', media: MEDIA.chestStretch },
-  { id: 'lat-stretch', name: 'Lat stretch', target: '30 sec', cue: 'Hinge back with one hand anchored and breathe into the side ribs.', media: MEDIA.latStretch },
-  { id: 'triceps-stretch', name: 'Triceps stretch', target: '30 sec', cue: 'Keep ribs stacked and avoid cranking the elbow.', media: MEDIA.tricepsStretch },
-  { id: 'rear-delt-stretch', name: 'Rear delt stretch', target: '30 sec', cue: 'Pull the arm across the body without shrugging.', media: MEDIA.shoulderStretch },
+const UPPER_LOW_FATIGUE_WARMUP: PlanItem[] = [
+  { id: 'arm-circles-volume', name: 'Arm circles', target: '15 reps', cue: 'Small to large circles, pain-free range.', media: MEDIA.armCircles },
+  { id: 'band-pull-aparts-volume', name: 'Band pull-aparts', target: '2 x 15', cue: 'Pull to chest height and keep traps relaxed.', media: MEDIA.bandPullApart },
+  { id: 'light-lateral-raises', name: 'Light lateral raises', target: '2 x 12', cue: 'Prime delts with a light, smooth tempo.', media: MEDIA.lateralRaise },
+  { id: 'easy-pushups', name: 'Easy push-ups', target: '8-10 reps', cue: 'Stop far from failure; this is only to warm up pressing.', media: MEDIA.pushups },
+  FIRST_LIFT_WARMUP,
 ];
 
-const LOWER_STRETCHES: PlanItem[] = [
-  { id: 'hamstring-stretch', name: 'Hamstrings', target: '30 sec each leg', cue: 'Soft knee, hinge from hips, stop before the lower back rounds.', media: MEDIA.hamstringStretch },
-  { id: 'quad-stretch', name: 'Quads', target: '30 sec each leg', cue: 'Knees close together, glute lightly squeezed.', media: MEDIA.quadStretch },
-  { id: 'hip-flexor-stretch', name: 'Hip flexors', target: '30 sec', cue: 'Posterior tilt first, then shift forward just enough to feel the front hip.', media: MEDIA.hipFlexorStretch },
-  { id: 'calf-stretch', name: 'Calves', target: '30 sec', cue: 'Heel down, knee straight first, then slightly bent for the soleus.', media: MEDIA.calfStretch },
+const LOWER_DEADLIFT_WARMUP: PlanItem[] = [
+  { id: 'leg-swings-deadlift', name: 'Leg swings', target: '15 each leg', cue: 'Controlled range, no snapping through the hip.', media: MEDIA.legSwings },
+  { id: 'hip-circles-deadlift', name: 'Hip circles', target: '10 each direction', cue: 'Slow circles before hinging heavy.', media: MEDIA.hipCircles },
+  { id: 'glute-bridges', name: 'Glute bridges', target: '2 x 12', cue: 'Tuck pelvis slightly and finish by squeezing glutes, not arching.', media: MEDIA.gluteBridge },
+  { id: 'hip-openers', name: 'Hip openers', target: '10 each side', cue: 'Open the hip and reset the pelvis between reps.', media: MEDIA.hipOpeners },
+  { id: 'bodyweight-squats-deadlift', name: 'Bodyweight squats', target: '10 reps', cue: 'Smooth reps to warm knees and hips without fatigue.', media: MEDIA.bodyweightSquat },
+  FIRST_LIFT_WARMUP,
+];
+
+const OPTIONAL_PUMP_WARMUP: PlanItem[] = [
+  { id: 'arm-circles-arms', name: 'Arm circles', target: '20 reps', cue: 'Easy range first, then gradually open up.', media: MEDIA.armCircles },
+  { id: 'band-pull-aparts-arms', name: 'Band pull-aparts', target: '2 x 15', cue: 'Move shoulder blades cleanly and keep ribs down.', media: MEDIA.bandPullApart },
+  { id: 'scapular-pushups-arms', name: 'Scapular push-ups', target: '10 reps', cue: 'Prime shoulder blades before light pump work.', media: MEDIA.scapularPushups },
+  { id: 'easy-pushups-arms', name: 'Easy push-ups', target: '8 reps', cue: 'Keep elbows warm and stop before fatigue.', media: MEDIA.pushups },
+];
+
+const UPPER_COOLDOWN: PlanItem[] = [
+  { id: 'wall-chest-stretch', name: 'Wall chest stretch', target: '30 sec each side', cue: 'Forearm on a wall, rotate away gently, and breathe slowly.', media: MEDIA.chestStretch },
+  { id: 'cross-body-shoulder', name: 'Cross-body shoulder stretch', target: '30 sec each side', cue: 'Pull the arm across the body without shrugging.', media: MEDIA.shoulderStretch },
+  { id: 'overhead-triceps-stretch', name: 'Overhead triceps stretch', target: '30 sec each side', cue: 'Keep ribs stacked and avoid forcing the elbow.', media: MEDIA.tricepsStretch },
+  { id: 'childs-pose-lat-reach', name: "Child's pose lat reach", target: '30 sec each side', cue: 'Sit hips back, reach one hand across, and breathe into the side ribs.' },
+];
+
+const LOWER_COOLDOWN: PlanItem[] = [
+  { id: 'standing-hamstring-stretch', name: 'Standing hamstring stretch', target: '30 sec each leg', cue: 'Soft knee, hinge from hips, stop before the lower back rounds.', media: MEDIA.hamstringStretch },
+  { id: 'standing-quad-stretch', name: 'Standing quad stretch', target: '30 sec each leg', cue: 'Knees close together, glute lightly squeezed.', media: MEDIA.quadStretch },
+  { id: 'half-kneeling-hip-flexor', name: 'Hip flexor stretch', target: '30 sec each side', cue: 'Tuck pelvis first, then shift forward just enough to feel the front hip.', media: MEDIA.hipFlexorStretch },
+  { id: 'wall-calf-stretch', name: 'Wall calf stretch', target: '30 sec each side', cue: 'Heel down, knee straight first, then slightly bent.', media: MEDIA.calfStretch },
+  { id: 'figure-four-glute-stretch', name: 'Figure-four glute stretch', target: '30 sec each side', cue: 'Sit or lie down, cross ankle over knee, and breathe into the hip.', media: MEDIA.gluteStretch },
+];
+
+const DEADLIFT_COOLDOWN: PlanItem[] = [
+  { id: 'deadlift-hamstring-stretch', name: 'Standing hamstring stretch', target: '30 sec each leg', cue: 'Soft knee and long spine. Keep it gentle after deadlifts.', media: MEDIA.hamstringStretch },
+  { id: 'deadlift-glute-stretch', name: 'Figure-four glute stretch', target: '30 sec each side', cue: 'No equipment needed. Breathe into the outside hip.', media: MEDIA.gluteStretch },
+  { id: 'deadlift-hip-flexor-stretch', name: 'Hip flexor stretch', target: '30 sec each side', cue: 'Tuck pelvis first, then glide forward lightly.', media: MEDIA.hipFlexorStretch },
+  { id: 'lower-back-breathing', name: "Child's pose breathing", target: '45 sec', cue: 'Sit hips back, let lower back relax, and take slow nasal breaths.' },
+];
+
+const ARMS_SHOULDERS_COOLDOWN: PlanItem[] = [
+  { id: 'arms-shoulder-stretch', name: 'Cross-body shoulder stretch', target: '30 sec each side', cue: 'Shoulder down, gentle pull across the chest.', media: MEDIA.shoulderStretch },
+  { id: 'arms-triceps-stretch', name: 'Overhead triceps stretch', target: '30 sec each side', cue: 'Reach overhead and keep ribs stacked.', media: MEDIA.tricepsStretch },
+  { id: 'arms-biceps-stretch', name: 'Wall biceps stretch', target: '30 sec each side', cue: 'Palm on wall, rotate away gently.', media: MEDIA.bicepsStretch },
+  { id: 'arms-neck-stretch', name: 'Neck stretch', target: '20 sec each side', cue: 'Gentle pressure only. No forcing.', media: MEDIA.neckStretch },
 ];
 
 function strengthExercise(input: PlanExercise): PlanExercise {
@@ -174,7 +240,7 @@ export const workoutPlan: WorkoutPlanDay[] = [
     focus: 'Heavy presses, pulls, and upper-back support work.',
     duration: '55-70 min',
     accent: 'from-sky-500/20 to-cyan-400/10',
-    warmup: UNIVERSAL_WARMUP,
+    warmup: UPPER_STRENGTH_WARMUP,
     workout: [
       strengthExercise({
         id: 'bench-press',
@@ -252,7 +318,7 @@ export const workoutPlan: WorkoutPlanDay[] = [
         media: exDbImage('Face_Pull'),
       }),
     ],
-    stretch: UPPER_STRETCHES,
+    stretch: UPPER_COOLDOWN,
   },
   {
     day: 2,
@@ -261,7 +327,7 @@ export const workoutPlan: WorkoutPlanDay[] = [
     focus: 'Heavy squat work with controlled hinge volume, calves, and core.',
     duration: '55-70 min',
     accent: 'from-emerald-500/20 to-lime-400/10',
-    warmup: UNIVERSAL_WARMUP,
+    warmup: LOWER_SQUAT_WARMUP,
     workout: [
       strengthExercise({
         id: 'squat',
@@ -340,7 +406,7 @@ export const workoutPlan: WorkoutPlanDay[] = [
         media: exDbImage('Plank'),
       }),
     ],
-    stretch: LOWER_STRETCHES,
+    stretch: LOWER_COOLDOWN,
   },
   {
     day: 3,
@@ -365,7 +431,7 @@ export const workoutPlan: WorkoutPlanDay[] = [
     focus: 'Moderate upper work that keeps fatigue low while maintaining volume.',
     duration: '45-60 min',
     accent: 'from-indigo-500/20 to-sky-400/10',
-    warmup: UNIVERSAL_WARMUP,
+    warmup: UPPER_LOW_FATIGUE_WARMUP,
     workout: [
       strengthExercise({
         id: 'incline-bench-press',
@@ -458,12 +524,7 @@ export const workoutPlan: WorkoutPlanDay[] = [
         media: exDbImage('Barbell_Curl'),
       }),
     ],
-    stretch: [
-      { id: 'chest-stretch-volume', name: 'Chest', target: '30 sec', cue: 'Gentle wall stretch, breathe slowly.', media: MEDIA.chestStretch },
-      { id: 'shoulders-stretch-volume', name: 'Shoulders', target: '30 sec', cue: 'Cross-body stretch without shrugging.', media: MEDIA.shoulderStretch },
-      { id: 'biceps-stretch-volume', name: 'Biceps', target: '30 sec', cue: 'Palm on wall, rotate away until light tension appears.', media: MEDIA.bicepsStretch },
-      { id: 'upper-traps-stretch', name: 'Upper traps', target: '30 sec', cue: 'Drop one ear toward shoulder, keep the opposite shoulder down.', media: MEDIA.neckStretch },
-    ],
+    stretch: UPPER_COOLDOWN,
   },
   {
     day: 5,
@@ -472,7 +533,7 @@ export const workoutPlan: WorkoutPlanDay[] = [
     focus: 'Fresh deadlifts first, then lower-body support work and core.',
     duration: '55-70 min',
     accent: 'from-amber-500/15 to-rose-400/10',
-    warmup: UNIVERSAL_WARMUP,
+    warmup: LOWER_DEADLIFT_WARMUP,
     workout: [
       strengthExercise({
         id: 'deadlift',
@@ -565,12 +626,7 @@ export const workoutPlan: WorkoutPlanDay[] = [
         media: exDbImage('Hanging_Leg_Raise'),
       }),
     ],
-    stretch: [
-      { id: 'hamstrings-stretch-volume', name: 'Hamstrings', target: '30 sec', cue: 'Hinge forward with a long spine.', media: MEDIA.hamstringStretch },
-      { id: 'glutes-stretch', name: 'Glutes', target: '30 sec', cue: 'Figure-four position, breathe into the hip.', media: MEDIA.gluteStretch },
-      { id: 'hip-flexors-stretch-volume', name: 'Hip flexors', target: '30 sec', cue: 'Tuck pelvis first, then glide forward.', media: MEDIA.hipFlexorStretch },
-      { id: 'calves-stretch-volume', name: 'Calves', target: '30 sec', cue: 'Heel down and breathe slowly.', media: MEDIA.calfStretch },
-    ],
+    stretch: DEADLIFT_COOLDOWN,
   },
   {
     day: 6,
@@ -579,7 +635,7 @@ export const workoutPlan: WorkoutPlanDay[] = [
     focus: 'Light pump work only. Skip it if recovery is not strong.',
     duration: '25-40 min',
     accent: 'from-fuchsia-500/15 to-pink-400/10',
-    warmup: UNIVERSAL_WARMUP,
+    warmup: OPTIONAL_PUMP_WARMUP,
     workout: [
       strengthExercise({
         id: 'lateral-raises-arms',
@@ -642,12 +698,7 @@ export const workoutPlan: WorkoutPlanDay[] = [
         media: exDbImage('Triceps_Pushdown'),
       }),
     ],
-    stretch: [
-      { id: 'triceps-stretch-arms', name: 'Triceps', target: '30 sec', cue: 'Reach overhead and keep ribs stacked.', media: MEDIA.tricepsStretch },
-      { id: 'biceps-stretch-arms', name: 'Biceps', target: '30 sec', cue: 'Palm on wall, rotate away gently.', media: MEDIA.bicepsStretch },
-      { id: 'shoulders-stretch-arms', name: 'Shoulders', target: '30 sec', cue: 'Cross-body stretch, shoulder down.', media: MEDIA.shoulderStretch },
-      { id: 'neck-stretch', name: 'Neck', target: '20 sec each side', cue: 'Gentle pressure only. No forcing.', media: MEDIA.neckStretch },
-    ],
+    stretch: ARMS_SHOULDERS_COOLDOWN,
   },
   {
     day: 7,

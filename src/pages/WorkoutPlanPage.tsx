@@ -37,7 +37,7 @@ import { strengthSetsService } from '@/services/strengthSets';
 import { bodyMetricsService } from '@/services/bodyMetrics';
 import { guidedWorkoutDraftsService } from '@/services/guidedWorkoutDrafts';
 import { calcStrengthCalories } from '@/engines/calorieEngine';
-import type { Exercise } from '@/types';
+import type { Exercise, StrengthSet } from '@/types';
 
 const DRAFT_KEY = 'perf-os-guided-plan-draft';
 const PLAN_NAME = 'Final Optimized 5-Day Plan (Squat & Deadlift Separated)';
@@ -96,6 +96,14 @@ interface LoggedSetRow {
   bodyweightKg?: number | null;
   loadLabel: string;
 }
+
+interface LastPlannedSession {
+  date: string;
+  sets: Array<{ reps: number; weight: number; set_number: number }>;
+}
+
+type PlannedExerciseHistory = Record<string, LastPlannedSession | null>;
+type StrengthSetWithActivity = StrengthSet & { activity?: { date?: string } | null };
 
 interface PhaseTab {
   id: PlanPhase;
@@ -313,6 +321,47 @@ function weightInputLabel(mode: LoadMode) {
   return 'Total kg';
 }
 
+function planExerciseAliases(exercise: PlanExercise) {
+  return [exercise.dbName, exercise.name, ...exercise.aliases].map(normalizeName);
+}
+
+function findExistingExercise(exercise: PlanExercise, existing: Exercise[]) {
+  const aliases = planExerciseAliases(exercise);
+  return existing.find(item => aliases.includes(normalizeName(item.name))) ?? null;
+}
+
+function buildLastSessionBefore(rawSets: StrengthSet[], beforeDate: string): LastPlannedSession | null {
+  const byDate: Record<string, LastPlannedSession['sets']> = {};
+
+  for (const raw of rawSets as StrengthSetWithActivity[]) {
+    const activityDate = raw.activity?.date;
+    if (!activityDate || activityDate >= beforeDate) continue;
+    if (!byDate[activityDate]) byDate[activityDate] = [];
+    byDate[activityDate].push({
+      reps: raw.reps ?? 0,
+      weight: raw.weight ?? 0,
+      set_number: raw.set_number ?? 0,
+    });
+  }
+
+  const latestDate = Object.keys(byDate).sort().reverse()[0];
+  if (!latestDate) return null;
+
+  return {
+    date: latestDate,
+    sets: byDate[latestDate].sort((a, b) => a.set_number - b.set_number),
+  };
+}
+
+function formatLastSet(set: LastPlannedSession['sets'][number], exercise: PlanExercise) {
+  if (exercise.logUnit === 'seconds') {
+    return `${set.reps}s`;
+  }
+
+  const load = set.weight > 0 ? `${Math.round(set.weight * 10) / 10}kg` : 'BW';
+  return `${set.reps}x${load}`;
+}
+
 function lowerRepTarget(repRange: string) {
   const match = repRange.match(/\d+/);
   return match ? match[0] : '';
@@ -371,6 +420,45 @@ function ChecklistItem({
         </a>
       )}
     </motion.div>
+  );
+}
+
+function LastSessionCard({
+  exercise,
+  session,
+  loading,
+}: {
+  exercise: PlanExercise;
+  session: LastPlannedSession | null | undefined;
+  loading: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 py-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Last time</p>
+        {session && (
+          <p className="text-[11px] font-semibold text-primary">
+            {format(new Date(`${session.date}T12:00:00`), 'MMM d')}
+          </p>
+        )}
+      </div>
+      {loading ? (
+        <p className="mt-1 text-xs text-muted-foreground">Checking previous sets...</p>
+      ) : session ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {session.sets.map((set, index) => (
+            <span
+              key={`${session.date}-${set.set_number}-${index}`}
+              className="rounded-lg border border-white/[0.08] bg-white/[0.05] px-2 py-1 text-[11px] font-semibold text-white nums"
+            >
+              S{index + 1}: {formatLastSet(set, exercise)}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-1 text-xs text-muted-foreground">No previous logged sets yet.</p>
+      )}
+    </div>
   );
 }
 
@@ -473,6 +561,8 @@ export default function WorkoutPlanPage() {
   const [bodyWeightKg, setBodyWeightKg] = useState<number | null>(null);
   const [draftReady, setDraftReady] = useState(false);
   const [draftStatus, setDraftStatus] = useState<DraftStatus>('loading');
+  const [plannedHistory, setPlannedHistory] = useState<PlannedExerciseHistory>({});
+  const [plannedHistoryLoading, setPlannedHistoryLoading] = useState(false);
 
   const planDay = useMemo(
     () => workoutPlan.find(item => item.day === selectedDay) ?? workoutPlan[0],
@@ -539,6 +629,42 @@ export default function WorkoutPlanPage() {
       .then(profile => setBodyWeightKg(profile.weight))
       .catch(() => setBodyWeightKg(null));
   }, []);
+
+  useEffect(() => {
+    if (planDay.workout.length === 0) {
+      setPlannedHistory({});
+      setPlannedHistoryLoading(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setPlannedHistory({});
+    setPlannedHistoryLoading(true);
+
+    exercisesService.getAll()
+      .then(async existing => {
+        const entries = await Promise.all(planDay.workout.map(async exercise => {
+          const matched = findExistingExercise(exercise, existing);
+          if (!matched) return [exercise.id, null] as const;
+          const rawSets = await strengthSetsService.getByExercise(matched.id, 120);
+          return [exercise.id, buildLastSessionBefore(rawSets, date)] as const;
+        }));
+
+        if (!cancelled) {
+          setPlannedHistory(Object.fromEntries(entries));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setPlannedHistory({});
+      })
+      .finally(() => {
+        if (!cancelled) setPlannedHistoryLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [date, planDay.workout]);
 
   const loggedRows = useMemo<LoggedSetRow[]>(() => {
     return planDay.workout.flatMap(exercise =>
@@ -1020,6 +1146,8 @@ export default function WorkoutPlanPage() {
                 const activeLoadMode = LOAD_MODE_OPTIONS.find(option => option.value === exerciseLoadMode) ?? LOAD_MODE_OPTIONS[0];
                 const barWeight = exerciseSets[0]?.barWeight || '20';
                 const bodyFactor = exerciseSets[0]?.bodyFactor || '100';
+                const hasHistory = Object.prototype.hasOwnProperty.call(plannedHistory, exercise.id);
+                const lastSession = plannedHistory[exercise.id];
                 return (
                 <div key={exercise.id} className="rounded-2xl glass p-3.5 space-y-3">
                   <MediaPanel exercise={exercise} mediaMode={mediaMode} />
@@ -1036,6 +1164,12 @@ export default function WorkoutPlanPage() {
                     </div>
                     <p className="text-xs text-white/58 leading-relaxed mt-2">{exercise.cue}</p>
                   </div>
+
+                  <LastSessionCard
+                    exercise={exercise}
+                    session={lastSession}
+                    loading={plannedHistoryLoading && !hasHistory}
+                  />
 
                   <div className="rounded-2xl border border-primary/20 bg-primary/[0.07] p-3">
                     <div className="flex items-start justify-between gap-3">
