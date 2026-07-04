@@ -1,13 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, TrendingUp, Dumbbell, Flame, Mic2, Settings } from 'lucide-react';
+import { Home, TrendingUp, Scale, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const TABS = [
   { path: '/',          icon: Home,       label: 'Home'     },
-  { path: '/plan',      icon: Dumbbell,   label: 'Plan'     },
-  { path: '/calories',  icon: Flame,      label: 'Food'     },
   { path: '/progress',  icon: TrendingUp, label: 'Progress' },
-  { path: '/speech',    icon: Mic2,       label: 'Speech'   },
+  { path: '/weight',    icon: Scale,      label: 'Weight'   },
   { path: '/settings',  icon: Settings,   label: 'Settings' },
 ] as const;
 

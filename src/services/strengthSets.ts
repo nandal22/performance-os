@@ -100,6 +100,39 @@ export const strengthSetsService = {
     };
   },
 
+  // Get the last N sessions' sets for a given exercise, most recent first
+  // (used for the "last time + best of last 3" progress card).
+  getRecentSessions: async (
+    exerciseId: string,
+    n = 3,
+  ): Promise<{ date: string; sets: { reps: number; weight: number; set_number: number }[] }[]> => {
+    const { data, error } = await supabase
+      .from('strength_sets')
+      .select('reps, weight, set_number, activity:activities!inner(date)')
+      .eq('exercise_id', exerciseId)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (error) throw error;
+    if (!data || data.length === 0) return [];
+
+    const byDate: Record<string, { reps: number; weight: number; set_number: number }[]> = {};
+    for (const s of data) {
+      const date = ((s.activity as unknown) as { date: string } | null)?.date ?? '';
+      if (!date) continue;
+      if (!byDate[date]) byDate[date] = [];
+      byDate[date].push({ reps: s.reps ?? 0, weight: s.weight ?? 0, set_number: s.set_number ?? 0 });
+    }
+
+    return Object.keys(byDate)
+      .sort()
+      .reverse()
+      .slice(0, n)
+      .map(date => ({
+        date,
+        sets: byDate[date].sort((a, b) => a.set_number - b.set_number),
+      }));
+  },
+
   // Get the all-time best set for an exercise (highest estimated 1RM)
   getBestForExercise: async (exerciseId: string): Promise<{ weight: number; reps: number; estimated_1rm: number } | null> => {
     const { data, error } = await supabase

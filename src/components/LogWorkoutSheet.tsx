@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { X, CheckCircle2, Trash2, ChevronDown, Plus, Pencil, Star, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import type { Activity, CardioCalorieSource, CardioMethod, Exercise, ExerciseCategory } from '@/types';
+import type { Activity, CardioCalorieSource, Exercise, ExerciseCategory, WorkoutCategory, WorkoutSubType } from '@/types';
 import { activitiesService } from '@/services/activities';
 import { exercisesService } from '@/services/exercises';
 import { strengthSetsService } from '@/services/strengthSets';
@@ -11,10 +11,11 @@ import { bodyMetricsService } from '@/services/bodyMetrics';
 import { toISODate } from '@/lib/utils';
 import { calcCardioCalories, calcStrengthCalories } from '@/engines/calorieEngine';
 import ExerciseProgressSheet from './ExerciseProgressSheet';
+import ExerciseProgressCard from './ExerciseProgressCard';
 
 const DRAFT_KEY = 'perf-os-draft';
 
-type LastSession = { date: string; sets: { reps: number; weight: number; set_number: number }[] } | null;
+type RecentSession = { date: string; sets: { reps: number; weight: number; set_number: number }[] };
 type LoadMode = 'total' | 'dumbbell_pair' | 'barbell_plates' | 'bodyweight';
 
 const LOAD_MODE_OPTIONS: Array<{ value: LoadMode; label: string; detail: string }> = [
@@ -37,15 +38,22 @@ const DEFAULT_MODE_BY_EQUIPMENT: Record<string, LoadMode> = {
   bodyweight: 'bodyweight',
 };
 
-const CARDIO_METHODS: Array<{ value: CardioMethod; label: string }> = [
-  { value: 'running', label: 'Running' },
-  { value: 'treadmill', label: 'Treadmill' },
-  { value: 'stair_machine', label: 'Stair machine' },
-  { value: 'elliptical', label: 'Elliptical' },
-  { value: 'cycling_bike', label: 'Cycling / bike' },
-  { value: 'rowing', label: 'Rowing' },
-  { value: 'other_machine', label: 'Other machine' },
+const SUB_TYPES: Array<{ value: WorkoutSubType; label: string }> = [
+  { value: 'burn', label: 'Burn' },
+  { value: 'strength', label: 'Strength' },
+  { value: 'hrx', label: 'HRX' },
 ];
+
+/** Cult sub-types other than "strength" are logged like a cardio/class session. */
+function isStrengthCategory(type: WorkoutCategory, subType: WorkoutSubType) {
+  return type === 'gym' || (type === 'cult_session' && subType === 'strength');
+}
+
+function cardioMethodFor(type: WorkoutCategory, subType: WorkoutSubType): 'running' | 'swimming' | 'cult_burn' | 'cult_hrx' {
+  if (type === 'swimming') return 'swimming';
+  if (type === 'cult_session') return subType === 'hrx' ? 'cult_hrx' : 'cult_burn';
+  return 'running';
+}
 
 interface LoggedSet {
   uid: string;
@@ -63,6 +71,7 @@ interface LoggedSet {
 
 interface WorkoutDraft {
   type: Activity['type'];
+  subType?: WorkoutSubType;
   date: string;
   loggedSets: LoggedSet[];
   savedAt: number;
@@ -76,16 +85,16 @@ interface Props {
 }
 
 const TYPES = [
-  { value: 'strength', label: 'Strength', icon: '💪' },
-  { value: 'cardio',   label: 'Cardio',   icon: '🏃' },
-  { value: 'sport',    label: 'Sport',    icon: '⚽' },
-  { value: 'mobility', label: 'Mobility', icon: '🧘' },
-  { value: 'custom',   label: 'Other',    icon: '⚡' },
+  { value: 'gym',          label: 'Gym',          icon: '💪' },
+  { value: 'cult_session', label: 'Cult Session', icon: '🔥' },
+  { value: 'swimming',     label: 'Swimming',     icon: '🏊' },
+  { value: 'run',          label: 'Run',          icon: '🏃' },
 ] as const;
 
 export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume = false }: Props) {
   // Session metadata
-  const [type,     setType]     = useState<Activity['type']>('strength');
+  const [type,     setType]     = useState<WorkoutCategory>('gym');
+  const [subType,  setSubType]  = useState<WorkoutSubType>('burn');
   const [date,     setDate]     = useState(toISODate(new Date()));
   const [duration, setDuration] = useState('');
   const [notes,    setNotes]    = useState('');
@@ -96,7 +105,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
   const [exSearch,   setExSearch]   = useState('');
   const [showPicker, setShowPicker] = useState(false);
   const [currentEx,  setCurrentEx]  = useState<{ id: string; name: string } | null>(null);
-  const [lastSession, setLastSession] = useState<LastSession>(null);
+  const [recentSessions, setRecentSessions] = useState<RecentSession[]>([]);
   const [creatingEx, setCreatingEx] = useState(false);
 
   // Tracking
@@ -128,8 +137,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
   // New exercise category (when creating inline)
   const [newExCategory, setNewExCategory] = useState<ExerciseCategory>('other');
 
-  // Cardio
-  const [cardioMethod, setCardioMethod] = useState<CardioMethod>('running');
+  // Cardio / class session
   const [distance, setDistance] = useState('');
   const [avgHr,    setAvgHr]    = useState('');
   const [calories, setCalories] = useState('');
@@ -140,6 +148,8 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
     ? exercises.find(exercise => exercise.id === currentExerciseId)
     : null;
   const selectedEquipment = selectedExercise?.equipment ?? null;
+  const isStrengthUI = isStrengthCategory(type, subType);
+  const cardioMethod = cardioMethodFor(type, subType);
 
   // Load exercises once
   useEffect(() => {
@@ -166,6 +176,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
         if (autoResume) {
           // Auto-restore immediately (opened via "Continue Workout" button)
           setType(draft.type);
+          setSubType(draft.subType ?? 'burn');
           setDate(draft.date);
           setLoggedSets(draft.loggedSets);
         } else {
@@ -179,12 +190,12 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
     }
   }, [autoResume, open]);
 
-  // Fetch last session whenever exercise changes
+  // Fetch recent sessions (last time + best of last 3) whenever exercise changes
   useEffect(() => {
-    if (!currentExerciseId) { setLastSession(null); return; }
-    strengthSetsService.getLastSession(currentExerciseId)
-      .then(setLastSession)
-      .catch(() => setLastSession(null));
+    if (!currentExerciseId) { setRecentSessions([]); return; }
+    strengthSetsService.getRecentSessions(currentExerciseId, 3)
+      .then(setRecentSessions)
+      .catch(() => setRecentSessions([]));
   }, [currentExerciseId]);
 
   useEffect(() => {
@@ -264,12 +275,13 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
 
   const saveDraft = (sets: LoggedSet[], t: Activity['type'], d: string) => {
     if (sets.length === 0) { localStorage.removeItem(DRAFT_KEY); return; }
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({ type: t, date: d, loggedSets: sets, savedAt: Date.now() }));
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ type: t, subType, date: d, loggedSets: sets, savedAt: Date.now() }));
   };
 
   const restoreDraft = () => {
     if (!draftToRestore) return;
     setType(draftToRestore.type);
+    setSubType(draftToRestore.subType ?? 'burn');
     setDate(draftToRestore.date);
     setLoggedSets(draftToRestore.loggedSets);
     setDraftToRestore(null);
@@ -392,7 +404,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
     grouped[s.exercise_id].sets.push(s);
   }
   const durationMins = duration ? parseInt(duration, 10) : 0;
-  const strengthCalories = type === 'strength' && bodyWeightKg
+  const strengthCalories = isStrengthUI && bodyWeightKg
     ? calcStrengthCalories({
         sets: loggedSets.map(set => ({
           reps: set.reps,
@@ -412,7 +424,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
   const distanceKm = distance ? parseFloat(distance) : undefined;
   const avgHeartRate = avgHr ? parseInt(avgHr, 10) : undefined;
   const machineCalories = calories ? parseInt(calories, 10) : undefined;
-  const cardioEstimate = type === 'cardio' && durationMins > 0 && bodyWeightKg
+  const cardioEstimate = !isStrengthUI && durationMins > 0 && bodyWeightKg
     ? calcCardioCalories({
         duration: durationMins,
         distance: distanceKm,
@@ -428,17 +440,17 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
       : 'unavailable';
 
   const resetForm = () => {
-    setType('strength');
+    setType('gym');
+    setSubType('burn');
     setDate(toISODate(new Date()));
     setDuration('');
     setNotes('');
     setLoggedSets([]);
     setCurrentEx(null);
-    setLastSession(null);
+    setRecentSessions([]);
     setCurrentReps('');
     setCurrentWeight('');
     setExSearch('');
-    setCardioMethod('running');
     setDistance('');
     setAvgHr('');
     setCalories('');
@@ -449,18 +461,19 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
 
   const handleFinish = async () => {
     if (!date) return toast.error('Please set a date');
-    if (type === 'strength' && loggedSets.length === 0) return toast.error('Log at least one set');
-    if (type === 'cardio' && durationMins <= 0) return toast.error('Enter cardio duration');
+    if (isStrengthUI && loggedSets.length === 0) return toast.error('Log at least one set');
+    if (!isStrengthUI && durationMins <= 0) return toast.error('Enter duration');
 
     setSaving(true);
     try {
       const activity = await activitiesService.create({
         date,
         type,
+        sub_type:           type === 'cult_session' ? subType : undefined,
         duration:           duration ? parseInt(duration) : undefined,
         notes:              notes || undefined,
         tags:               [],
-        structured_metrics: type === 'strength' ? {
+        structured_metrics: isStrengthUI ? {
           calorieEstimate: strengthCalories ? {
             calories: strengthCalories.calories,
             met: strengthCalories.met,
@@ -487,10 +500,9 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
               label: s.load_label,
             })),
           },
-        } : type === 'cardio' ? {
+        } : {
           cardio: {
             method: cardioMethod,
-            methodLabel: CARDIO_METHODS.find(item => item.value === cardioMethod)?.label ?? 'Cardio',
             distanceKm: distanceKm ?? null,
             avgHeartRate: avgHeartRate ?? null,
             bodyWeightKg,
@@ -505,10 +517,10 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
             durationHours: cardioEstimate?.duration_hrs ?? durationMins / 60,
             bodyWeightKg,
           } : null,
-        } : {},
+        },
       });
 
-      if (type === 'strength' && loggedSets.length > 0) {
+      if (isStrengthUI && loggedSets.length > 0) {
         await strengthSetsService.createMany(
           loggedSets.map((s, i) => ({
             activity_id: activity.id,
@@ -520,7 +532,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
         );
       }
 
-      if (type === 'cardio') {
+      if (!isStrengthUI) {
         await cardioMetricsService.create({
           activity_id:    activity.id,
           distance:       distanceKm,
@@ -608,6 +620,23 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                   </button>
                 ))}
               </div>
+              {type === 'cult_session' && (
+                <div className="flex gap-1.5 flex-wrap">
+                  {SUB_TYPES.map(st => (
+                    <button
+                      key={st.value}
+                      onClick={() => setSubType(st.value)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                        subType === st.value
+                          ? 'bg-orange-400 text-black'
+                          : 'bg-white/5 text-muted-foreground hover:bg-white/10'
+                      }`}
+                    >
+                      {st.label}
+                    </button>
+                  ))}
+                </div>
+              )}
               <input
                 type="date"
                 value={date}
@@ -617,7 +646,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
             </div>
 
             {/* ── STRENGTH ── */}
-            {type === 'strength' && (
+            {isStrengthUI && (
               <div className="px-4 pt-4 pb-3 space-y-4">
 
                 {/* Quick-add card */}
@@ -726,21 +755,8 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                     )}
                   </div>
 
-                  {/* Last session hint */}
-                  {lastSession && (
-                    <div className="bg-white/3 border border-white/8 rounded-xl px-3 py-2">
-                      <p className="text-[10px] text-muted-foreground mb-1">
-                        Last time · {format(new Date(lastSession.date + 'T12:00:00'), 'MMM d')}
-                      </p>
-                      <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                        {lastSession.sets.map((s, i) => (
-                          <span key={i} className="text-xs text-white/70">
-                            S{i + 1}: {s.reps}×{s.weight > 0 ? `${s.weight}kg` : 'BW'}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  {/* Last time + best of last 3 sessions */}
+                  <ExerciseProgressCard sessions={recentSessions} />
 
                   {/* Reps × Weight */}
                   <div className="rounded-2xl border border-primary/25 bg-primary/[0.08] p-3 shadow-[0_12px_30px_rgba(0,0,0,0.18)]">
@@ -973,33 +989,17 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
               </div>
             )}
 
-            {/* ── CARDIO ── */}
-            {type === 'cardio' && (
+            {/* ── SWIM / RUN / CULT ── */}
+            {!isStrengthUI && (
               <div className="px-4 pt-4 pb-3 space-y-3">
-                <p className="text-xs text-muted-foreground uppercase tracking-widest">Cardio Details</p>
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Method</label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {CARDIO_METHODS.map(method => (
-                      <button
-                        key={method.value}
-                        onClick={() => setCardioMethod(method.value)}
-                        className={`rounded-xl px-2 py-2 text-[11px] font-semibold transition-colors ${
-                          cardioMethod === method.value
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-white/5 text-muted-foreground hover:bg-white/10'
-                        }`}
-                      >
-                        {method.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <p className="text-xs text-muted-foreground uppercase tracking-widest">Session Details</p>
                 <div className="grid grid-cols-3 gap-2">
                   {([
-                    { label: 'Distance (km)', placeholder: '5.0',  value: distance,  step: '0.01', set: setDistance },
+                    ...(type === 'swimming' || type === 'run'
+                      ? [{ label: 'Distance (km)', placeholder: '5.0', value: distance, step: '0.01', set: setDistance }]
+                      : []),
                     { label: 'Avg HR (bpm)',  placeholder: '145',  value: avgHr,     step: '1',    set: setAvgHr    },
-                    { label: 'Machine kcal',  placeholder: '400',  value: calories,  step: '1',    set: setCalories },
+                    { label: 'App kcal',      placeholder: '400',  value: calories,  step: '1',    set: setCalories },
                   ] as const).map(f => (
                     <div key={f.label}>
                       <label className="text-xs text-muted-foreground block mb-1">{f.label}</label>
@@ -1020,9 +1020,9 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                       <p className="text-xs font-semibold text-orange-200">Burn estimate</p>
                       <p className="text-[11px] text-muted-foreground mt-0.5">
                         {machineCalories != null
-                          ? 'Using machine calories.'
+                          ? 'Using entered app kcal.'
                           : cardioEstimate
-                            ? 'Estimated from latest body weight and cardio method.'
+                            ? 'Estimated from latest body weight and session type.'
                             : 'Enter duration and body weight to estimate.'}
                       </p>
                     </div>

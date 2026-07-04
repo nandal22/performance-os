@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -6,14 +6,14 @@ import { Toaster } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import LoginPage        from '@/pages/LoginPage';
 import DashboardPage    from '@/pages/DashboardPage';
-import WorkoutPlanPage  from '@/pages/WorkoutPlanPage';
-import CaloriesPage     from '@/pages/CaloriesPage';
-import ProgressPage     from '@/pages/ProgressPage';
-import BodyMetricsPage  from '@/pages/BodyMetricsPage';
-import SpeechPage       from '@/pages/SpeechPage';
 import SettingsPage     from '@/pages/SettingsPage';
 import BottomNav        from '@/components/BottomNav';
 import { dataRepairsService } from '@/services/dataRepairs';
+
+// Chart-heavy pages (recharts) are route-split out of the main bundle —
+// they're not the landing page, so there's no reason to pay for them upfront.
+const ProgressPage = lazy(() => import('@/pages/ProgressPage'));
+const WeightPage    = lazy(() => import('@/pages/WeightPage'));
 
 function LoadingScreen() {
   return (
@@ -61,15 +61,16 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedLayout />}>
           <Route path="/"          element={<DashboardPage />} />
-          <Route path="/plan"     element={<WorkoutPlanPage />} />
-          <Route path="/calories" element={<CaloriesPage />}    />
-          <Route path="/progress" element={<ProgressPage />}   />
-          <Route path="/body"     element={<BodyMetricsPage />} />
-          <Route path="/speech"   element={<SpeechPage />}      />
+          <Route path="/progress" element={<Suspense fallback={<LoadingScreen />}><ProgressPage /></Suspense>} />
+          <Route path="/weight"   element={<Suspense fallback={<LoadingScreen />}><WeightPage /></Suspense>}   />
           <Route path="/settings" element={<SettingsPage />}    />
           <Route path="/history"  element={<Navigate to="/" replace />} />
           <Route path="/goals"    element={<Navigate to="/" replace />} />
           <Route path="/sleep"    element={<Navigate to="/" replace />} />
+          <Route path="/plan"     element={<Navigate to="/" replace />} />
+          <Route path="/calories" element={<Navigate to="/" replace />} />
+          <Route path="/body"     element={<Navigate to="/weight" replace />} />
+          <Route path="/speech"   element={<Navigate to="/" replace />} />
           <Route path="/analytics" element={<Navigate to="/progress" replace />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

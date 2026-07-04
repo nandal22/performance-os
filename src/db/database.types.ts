@@ -10,7 +10,8 @@ export type Database = {
           id: string;
           user_id: string;
           date: string;
-          type: 'strength' | 'cardio' | 'sport' | 'mobility' | 'custom';
+          type: 'gym' | 'cult_session' | 'swimming' | 'run';
+          sub_type: 'burn' | 'strength' | 'hrx' | null;
           duration: number | null;
           notes: string | null;
           tags: string[];
@@ -22,7 +23,8 @@ export type Database = {
           id?: string;
           user_id: string;
           date: string;
-          type: 'strength' | 'cardio' | 'sport' | 'mobility' | 'custom';
+          type: 'gym' | 'cult_session' | 'swimming' | 'run';
+          sub_type?: 'burn' | 'strength' | 'hrx' | null;
           duration?: number | null;
           notes?: string | null;
           tags?: string[];
@@ -32,7 +34,8 @@ export type Database = {
         };
         Update: {
           date?: string;
-          type?: 'strength' | 'cardio' | 'sport' | 'mobility' | 'custom';
+          type?: 'gym' | 'cult_session' | 'swimming' | 'run';
+          sub_type?: 'burn' | 'strength' | 'hrx' | null;
           duration?: number | null;
           notes?: string | null;
           tags?: string[];
@@ -144,13 +147,9 @@ export type Database = {
           user_id: string;
           date: string;
           weight: number | null;
-          waist: number | null;
-          chest: number | null;
-          thigh: number | null;
-          body_fat: number | null;
-          resting_hr: number | null;
-          sleep_hours: number | null;
-          steps: number | null;
+          height: number | null;
+          age: number | null;
+          gender: 'male' | 'female' | null;
           notes: string | null;
           created_at: string;
         };
@@ -159,25 +158,17 @@ export type Database = {
           user_id: string;
           date: string;
           weight?: number | null;
-          waist?: number | null;
-          chest?: number | null;
-          thigh?: number | null;
-          body_fat?: number | null;
-          resting_hr?: number | null;
-          sleep_hours?: number | null;
-          steps?: number | null;
+          height?: number | null;
+          age?: number | null;
+          gender?: 'male' | 'female' | null;
           notes?: string | null;
           created_at?: string;
         };
         Update: {
           weight?: number | null;
-          waist?: number | null;
-          chest?: number | null;
-          thigh?: number | null;
-          body_fat?: number | null;
-          resting_hr?: number | null;
-          sleep_hours?: number | null;
-          steps?: number | null;
+          height?: number | null;
+          age?: number | null;
+          gender?: 'male' | 'female' | null;
           notes?: string | null;
         };
       };

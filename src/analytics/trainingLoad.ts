@@ -4,11 +4,10 @@ import { getWeekStart } from '@/lib/utils';
 
 // Arbitrary units per minute of activity by type
 const LOAD_PER_MIN: Record<string, number> = {
-  strength: 1.0,
-  cardio:   0.8,
-  sport:    0.7,
-  mobility: 0.3,
-  custom:   0.6,
+  gym:          1.0,
+  cult_session: 0.8,
+  swimming:     0.7,
+  run:          0.8,
 };
 
 const DEFAULT_DURATION = 30; // minutes, used when not recorded
@@ -33,7 +32,7 @@ export function calcWeeklyLoads(activities: Activity[]): WeeklyLoad[] {
     const entry     = weekMap.get(weekStart) ?? { strength_load: 0, cardio_load: 0, session_count: 0 };
     const load      = calcActivityLoad(activity);
 
-    if (activity.type === 'strength') {
+    if (activity.type === 'gym' || (activity.type === 'cult_session' && activity.sub_type === 'strength')) {
       entry.strength_load += load;
     } else {
       entry.cardio_load += load;

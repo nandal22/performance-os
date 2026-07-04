@@ -4,9 +4,10 @@
 
 // ---- Enums ----
 
-export type ActivityType = 'strength' | 'cardio' | 'sport' | 'mobility' | 'custom';
+export type WorkoutCategory = 'gym' | 'cult_session' | 'swimming' | 'run';
+export type WorkoutSubType = 'burn' | 'strength' | 'hrx';
 
-export type CardioMethod = 'running' | 'treadmill' | 'stair_machine' | 'elliptical' | 'cycling_bike' | 'rowing' | 'other_machine';
+export type CardioMethod = 'running' | 'swimming' | 'cult_burn' | 'cult_hrx';
 
 export type CardioCalorieSource = 'machine' | 'estimated' | 'unavailable';
 
@@ -22,7 +23,8 @@ export interface Activity {
   id: string;
   user_id: string;
   date: string;           // ISO date YYYY-MM-DD
-  type: ActivityType;
+  type: WorkoutCategory;
+  sub_type?: WorkoutSubType; // only set when type === 'cult_session'
   duration?: number;      // minutes
   notes?: string;
   tags: string[];
@@ -77,13 +79,6 @@ export interface BodyMetric {
   height?: number;        // cm (rarely changes; latest value used for BMR)
   age?: number;           // years at time of log
   gender?: Gender;        // 'male' | 'female' (for Mifflin-St Jeor)
-  waist?: number;         // cm
-  chest?: number;         // cm
-  thigh?: number;         // cm
-  body_fat?: number;      // %
-  resting_hr?: number;
-  sleep_hours?: number;
-  steps?: number;
   notes?: string;
   created_at: string;
 }
@@ -143,23 +138,3 @@ export type CreateStrengthSet = Omit<StrengthSet, 'id' | 'volume' | 'created_at'
 export type CreateCardioMetrics = Omit<CardioMetrics, 'id' | 'created_at'>;
 export type CreateBodyMetric = Omit<BodyMetric, 'id' | 'user_id' | 'created_at'>;
 export type CreateExercise = Omit<Exercise, 'id' | 'created_at'>;
-
-// ---- Speech Practice ----
-
-export interface SpeechPracticeSession {
-  id: string;
-  user_id: string;
-  date: string;                 // YYYY-MM-DD
-  completed_drills: string[];   // static frontend drill ids completed that day
-  minutes: number;
-  clarity_rating?: number;
-  pace_rating?: number;
-  note?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export type CreateSpeechPracticeSession = Omit<
-  SpeechPracticeSession,
-  'id' | 'user_id' | 'created_at' | 'updated_at'
->;

@@ -3,15 +3,13 @@ import { Link } from 'react-router-dom';
 import { signOut } from '@/hooks/useAuth';
 import { activitiesService } from '@/services/activities';
 import { bodyMetricsService } from '@/services/bodyMetrics';
-import { calorieLogsService, type CalorieSummary } from '@/services/calorieLogs';
-import type { Activity, BodyMetric } from '@/types';
+import type { Activity, BodyMetric, WorkoutCategory } from '@/types';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { Dumbbell, Plus, ChevronRight, Flame, CalendarCheck } from 'lucide-react';
+import { Dumbbell, Plus, ChevronRight, Scale } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import LogWorkoutSheet from '@/components/LogWorkoutSheet';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
-import { cutPhaseTargets, getSuggestedPlanDay } from '@/data/workoutPlan';
 
 const DRAFT_KEY = 'perf-os-draft';
 
@@ -27,12 +25,17 @@ function readDraft(): DraftMeta | null {
   } catch { return null; }
 }
 
-const TYPE_CONFIG: Record<string, { bg: string; icon: string; accent: string }> = {
-  strength: { bg: 'bg-blue-500/10',   icon: '💪', accent: 'bg-blue-500' },
-  cardio:   { bg: 'bg-orange-500/10', icon: '🏃', accent: 'bg-orange-500' },
-  sport:    { bg: 'bg-green-500/10',  icon: '⚽', accent: 'bg-green-500' },
-  mobility: { bg: 'bg-purple-500/10', icon: '🧘', accent: 'bg-purple-500' },
-  custom:   { bg: 'bg-slate-500/10',  icon: '⚡', accent: 'bg-slate-500' },
+const TYPE_CONFIG: Record<WorkoutCategory, { bg: string; icon: string }> = {
+  gym:          { bg: 'bg-blue-500/10',   icon: '💪' },
+  cult_session: { bg: 'bg-orange-500/10', icon: '🔥' },
+  swimming:     { bg: 'bg-cyan-500/10',   icon: '🏊' },
+  run:          { bg: 'bg-green-500/10',  icon: '🏃' },
+};
+
+const SUB_TYPE_LABEL: Record<string, string> = {
+  burn: 'Burn',
+  strength: 'Strength',
+  hrx: 'HRX',
 };
 
 const fadeUp = {
@@ -40,61 +43,42 @@ const fadeUp = {
   show:   { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 380, damping: 28 } },
 };
 
-interface GuidedPlanMeta {
-  plan?: { day?: number; title?: string };
-  summary?: { completedSets?: number; totalSets?: number };
-  completed?: { strengthSets?: unknown[] };
-  calorieEstimate?: { calories?: number };
+function activityTitle(activity: Activity) {
+  if (activity.type === 'cult_session' && activity.sub_type) {
+    return `Cult Session · ${SUB_TYPE_LABEL[activity.sub_type] ?? activity.sub_type}`;
+  }
+  const labels: Record<WorkoutCategory, string> = {
+    gym: 'Gym', cult_session: 'Cult Session', swimming: 'Swimming', run: 'Run',
+  };
+  return labels[activity.type];
 }
 
 function activityMeta(activity: Activity) {
-  const guided = activity.structured_metrics?.guided_plan as GuidedPlanMeta | undefined;
-  if (guided) {
-    const day = guided.plan?.day ? `Day ${guided.plan.day}` : 'Guided';
-    const title = guided.plan?.title ?? 'Guided workout';
-    const completedSets = guided.summary?.completedSets ?? guided.completed?.strengthSets?.length;
-    const setText = guided.summary?.totalSets
-      ? `${guided.summary.completedSets ?? 0}/${guided.summary.totalSets} sets`
-      : typeof completedSets === 'number' && completedSets > 0
-        ? `${completedSets} sets`
-      : 'Guided plan';
-    return {
-      title,
-      detail: `${day} · ${setText}`,
-      kcal: guided.calorieEstimate?.calories,
-    };
-  }
-
-  const title = activity.type.charAt(0).toUpperCase() + activity.type.slice(1);
   const kcal = (activity.structured_metrics?.calorieEstimate as { calories?: number } | undefined)?.calories;
   return {
-    title,
-    detail: activity.tags?.length ? activity.tags.slice(0, 2).join(' · ') : 'Custom workout',
+    title: activityTitle(activity),
+    detail: activity.tags?.length ? activity.tags.slice(0, 2).join(' · ') : null,
     kcal,
   };
 }
 
 export default function DashboardPage() {
   const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
-  const [latestMetric,     setLatestMetric]     = useState<BodyMetric | null>(null);
+  const [latestWeight,     setLatestWeight]     = useState<BodyMetric | null>(null);
   const [loading,          setLoading]          = useState(true);
   const [showSheet,        setShowSheet]        = useState(false);
   const [resumingDraft,    setResumingDraft]    = useState(false);
   const [selectedId,       setSelectedId]       = useState<string | null>(null);
   const [draft,            setDraft]            = useState<DraftMeta | null>(readDraft);
-  const [calorieSummary,   setCalorieSummary]   = useState<CalorieSummary>({ calories: 0, protein: 0, carbs: 0, fat: 0 });
-  const todayPlan = getSuggestedPlanDay();
 
   const load = useCallback(async () => {
     try {
-      const [activities, metrics, calories] = await Promise.all([
+      const [activities, metrics] = await Promise.all([
         activitiesService.getAll(80),
         bodyMetricsService.getAll(1),
-        calorieLogsService.getSummary(),
       ]);
       setRecentActivities(activities);
-      setLatestMetric(metrics[0] ?? null);
-      setCalorieSummary(calories);
+      setLatestWeight(metrics[0] ?? null);
     } catch {
       toast.error('Failed to load data');
     } finally {
@@ -151,71 +135,27 @@ export default function DashboardPage() {
           )}
         </AnimatePresence>
 
-        {/* Cut phase guide */}
-        <div className="grid grid-cols-2 gap-2">
-          <Link
-            to="/plan"
-            className="rounded-2xl border border-primary/20 bg-primary/[0.07] p-3.5 active:scale-[0.98] transition-transform"
-          >
-            <div className="w-9 h-9 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center mb-3">
-              <CalendarCheck className="w-4 h-4 text-primary" />
-            </div>
-            <p className="text-sm font-semibold text-white">Today</p>
-            <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
-              Day {todayPlan.day} · {todayPlan.title}
+        {/* Weight snapshot */}
+        <Link
+          to="/weight"
+          className="flex items-center gap-3 rounded-2xl glass p-3.5 active:scale-[0.98] transition-transform"
+        >
+          <div className="w-9 h-9 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+            <Scale className="w-4 h-4 text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white">
+              {latestWeight?.weight ? `${latestWeight.weight} kg` : 'Log your weight'}
             </p>
-          </Link>
-
-          <Link
-            to="/calories"
-            className="rounded-2xl border border-orange-400/20 bg-orange-400/[0.07] p-3.5 active:scale-[0.98] transition-transform"
-          >
-            <div className="w-9 h-9 rounded-2xl bg-orange-400/10 border border-orange-400/25 flex items-center justify-center mb-3">
-              <Flame className="w-4 h-4 text-orange-300" />
-            </div>
-            <p className="text-sm font-semibold text-white nums">{Math.round(calorieSummary.calories)} kcal</p>
-            <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
-              Target {cutPhaseTargets.caloriesMin}-{cutPhaseTargets.caloriesMax}
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {latestWeight ? format(new Date(latestWeight.date), 'MMM d') : 'Feeds calorie estimates'}
             </p>
-          </Link>
-        </div>
-
-        {/* Body metrics snapshot */}
-        {latestMetric && (
-          <motion.div
-            variants={fadeUp} initial="hidden" animate="show"
-            className="rounded-2xl glass p-4"
-          >
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-3">
-              Latest Body Metrics · {format(new Date(latestMetric.date), 'MMM d')}
-            </p>
-            <div className="grid grid-cols-3 gap-3">
-              {latestMetric.weight && (
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-white nums">{latestMetric.weight}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">kg</p>
-                </div>
-              )}
-              {latestMetric.body_fat && (
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-white nums">{latestMetric.body_fat}%</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">body fat</p>
-                </div>
-              )}
-              {latestMetric.waist && (
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-white nums">{latestMetric.waist}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">cm waist</p>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
+          </div>
+          <ChevronRight className="w-4 h-4 text-white/20 flex-shrink-0" />
+        </Link>
 
         {/* Workout history */}
-        <motion.div variants={fadeUp} initial="hidden" animate="show"
-          style={{ transition: 'none' } as React.CSSProperties}
-        >
+        <motion.div variants={fadeUp} initial="hidden" animate="show">
           <div className="flex items-center justify-between mb-3 px-0.5">
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
               Workout History
@@ -242,7 +182,7 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-2">
               {recentActivities.map((a, i) => {
-                const cfg = TYPE_CONFIG[a.type] ?? TYPE_CONFIG.custom;
+                const cfg = TYPE_CONFIG[a.type] ?? TYPE_CONFIG.gym;
                 const meta = activityMeta(a);
                 return (
                   <motion.button
@@ -280,15 +220,6 @@ export default function DashboardPage() {
               })}
             </div>
           )}
-        </motion.div>
-
-        {/* Phase indicator */}
-        <motion.div
-          variants={fadeUp} initial="hidden" animate="show"
-          className="rounded-2xl border border-primary/15 bg-primary/[0.04] p-4 text-center"
-        >
-          <p className="text-xs text-primary font-medium mb-1">Tracker Mode</p>
-          <p className="text-[11px] text-muted-foreground">Guided plan · Custom workouts · Food tracking</p>
         </motion.div>
       </main>
 

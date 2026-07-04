@@ -49,17 +49,18 @@ interface GuidedMetrics {
 }
 
 const typeIcon: Record<string, string> = {
-  strength: '💪', cardio: '🏃', sport: '⚽', mobility: '🧘', custom: '⚡',
+  gym: '💪', cult_session: '🔥', swimming: '🏊', run: '🏃',
+};
+
+const SUB_TYPE_LABELS: Record<string, string> = {
+  burn: 'Burn', strength: 'Strength', hrx: 'HRX',
 };
 
 const CARDIO_METHOD_LABELS: Record<CardioMethod, string> = {
   running: 'Running',
-  treadmill: 'Treadmill',
-  stair_machine: 'Stair machine',
-  elliptical: 'Elliptical',
-  cycling_bike: 'Cycling / bike',
-  rowing: 'Rowing',
-  other_machine: 'Other machine',
+  swimming: 'Swimming',
+  cult_burn: 'Cult Burn',
+  cult_hrx: 'Cult HRX',
 };
 
 export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: Props) {
@@ -141,7 +142,13 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
               <>
                 <span className="text-xl">{typeIcon[activity.type] ?? '⚡'}</span>
                 <div>
-                  <h2 className="text-base font-semibold text-white capitalize">{activity.type}</h2>
+                  <h2 className="text-base font-semibold text-white capitalize">
+                    {activity.type === 'cult_session'
+                      ? `Cult Session${activity.sub_type ? ` · ${SUB_TYPE_LABELS[activity.sub_type] ?? activity.sub_type}` : ''}`
+                      : activity.type === 'gym' ? 'Gym'
+                      : activity.type === 'swimming' ? 'Swimming'
+                      : 'Run'}
+                  </h2>
                   <p className="text-xs text-muted-foreground">
                     {format(new Date(activity.date + 'T12:00:00'), 'EEEE, MMM d, yyyy')}
                     {activity.duration ? ` · ${activity.duration} min` : ''}
@@ -163,7 +170,7 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
           {activity && (
             <>
               {/* Stats summary */}
-              {activity.type === 'strength' && sets.length > 0 && (
+              {sets.length > 0 && (
                 <div className="grid grid-cols-3 gap-2">
                   <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-center">
                     <p className="text-xl font-bold text-white">{sets.length}</p>

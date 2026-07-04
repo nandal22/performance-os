@@ -113,7 +113,7 @@ export function computeStrengthPRs(sets: RawStrengthSet[]): StrengthPR[] {
 
 // ── Body PRs ─────────────────────────────────────────────────
 
-export type BodyPRType = 'lowest_weight' | 'smallest_waist' | 'best_body_fat';
+export type BodyPRType = 'lowest_weight';
 
 export interface BodyPR {
   type:  BodyPRType;
@@ -122,10 +122,7 @@ export interface BodyPR {
   unit:  string;
 }
 
-/**
- * Compute body composition PRs from a history of metrics.
- * - "Best" for weight / waist / body_fat = lowest value logged.
- */
+/** Compute body-weight PR (lowest value logged) from a history of metrics. */
 export function computeBodyPRs(metrics: BodyMetric[]): BodyPR[] {
   const prs: BodyPR[] = [];
 
@@ -133,18 +130,6 @@ export function computeBodyPRs(metrics: BodyMetric[]): BodyPR[] {
   if (withWeight.length > 0) {
     const best = withWeight.reduce((b, m) => m.weight! < b.weight! ? m : b);
     prs.push({ type: 'lowest_weight', value: best.weight!, date: best.date, unit: 'kg' });
-  }
-
-  const withWaist = metrics.filter(m => (m.waist ?? 0) > 0);
-  if (withWaist.length > 0) {
-    const best = withWaist.reduce((b, m) => m.waist! < b.waist! ? m : b);
-    prs.push({ type: 'smallest_waist', value: best.waist!, date: best.date, unit: 'cm' });
-  }
-
-  const withBF = metrics.filter(m => (m.body_fat ?? 0) > 0);
-  if (withBF.length > 0) {
-    const best = withBF.reduce((b, m) => m.body_fat! < b.body_fat! ? m : b);
-    prs.push({ type: 'best_body_fat', value: best.body_fat!, date: best.date, unit: '%' });
   }
 
   return prs;
