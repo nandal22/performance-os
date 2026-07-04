@@ -23,10 +23,10 @@ export default function LoginPage() {
 
         <div className="text-left space-y-3 py-4">
           {[
-            ['Lift', 'Strength and cardio tracking'],
-            ['Plan', 'Guided workout logging'],
-            ['Food', 'Calories, macros, quick foods, and steps'],
-            ['Trend', 'Compound lift progress cards'],
+            ['Log', 'Gym, Cult Session, Swimming, Run'],
+            ['Sets', 'Barbell, dumbbell, bodyweight, total weight'],
+            ['Trend', 'Last time and best of last 3 sessions'],
+            ['Weight', 'Quick log, powers calorie estimates'],
           ].map(([icon, label]) => (
             <div key={label} className="flex items-center gap-3 text-sm text-muted-foreground">
               <span className="w-12 text-xs font-semibold text-primary uppercase">{icon}</span>

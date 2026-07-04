@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { exercisesService } from '@/services/exercises';
 import { strengthSetsService } from '@/services/strengthSets';
+import ExerciseProgressCard from '@/components/ExerciseProgressCard';
 import type { Exercise, StrengthSet } from '@/types';
 
 const MAIN_LIFTS = [
@@ -216,7 +217,6 @@ export default function ProgressPage() {
     date: session.date,
     weight: session.maxWeight,
   }));
-  const lastSession = sessions.length ? sessions[sessions.length - 1] : null;
   const totalSets = sessions.reduce((sum, session) => sum + session.totalSets, 0);
   const totalVolume = sessions.reduce((sum, session) => sum + session.totalVolume, 0);
 
@@ -395,20 +395,7 @@ export default function ProgressPage() {
                 </div>
               ) : (
                 <>
-                  {lastSession && (
-                    <div className="rounded-2xl glass p-4 min-w-0">
-                      <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-3">
-                        Last Session · {format(new Date(lastSession.date + 'T12:00:00'), 'EEE, MMM d')}
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {lastSession.sets.map((set, index) => (
-                          <span key={`${lastSession.date}-${index}`} className="px-3 py-1.5 rounded-xl border border-white/[0.1] text-sm font-semibold text-white nums bg-white/[0.05]">
-                            {set.weight > 0 ? `${set.weight} kg` : 'BW'} x {set.reps}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <ExerciseProgressCard sessions={sessions.slice(-3).reverse()} />
 
                   {chartData.length > 1 && (
                     <div className="rounded-2xl glass p-4">

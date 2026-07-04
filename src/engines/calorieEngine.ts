@@ -14,12 +14,9 @@ export type CalorieMethod =
 
 export type CardioActivityMethod =
   | 'running'
-  | 'treadmill'
-  | 'stair_machine'
-  | 'elliptical'
-  | 'cycling_bike'
-  | 'rowing'
-  | 'other_machine';
+  | 'swimming'
+  | 'cult_burn'
+  | 'cult_hrx';
 
 export interface CalorieResult {
   calories: number;
@@ -50,24 +47,13 @@ const CARDIO_SPEED_MET: Array<{ maxSpeedKmh: number; met: number }> = [
   { maxSpeedKmh: Infinity, met: 14.0 },
 ];
 
-const CYCLING_SPEED_MET: Array<{ maxSpeedKmh: number; met: number }> = [
-  { maxSpeedKmh: 12, met: 4.0 },
-  { maxSpeedKmh: 16, met: 6.0 },
-  { maxSpeedKmh: 20, met: 8.0 },
-  { maxSpeedKmh: 25, met: 10.0 },
-  { maxSpeedKmh: Infinity, met: 12.0 },
-];
-
 const CARDIO_DEFAULT_MET = 6.0;
 
 const CARDIO_METHOD_MET: Record<CardioActivityMethod, number> = {
   running: 9.0,
-  treadmill: 8.5,
-  stair_machine: 8.8,
-  elliptical: 5.5,
-  cycling_bike: 7.5,
-  rowing: 7.0,
-  other_machine: CARDIO_DEFAULT_MET,
+  swimming: 7.0,
+  cult_burn: 8.0,
+  cult_hrx: 8.5,
 };
 
 /** Keyword -> MET when no distance is available. */
@@ -92,13 +78,12 @@ const STRENGTH_INTENSITY_MET: Array<{ maxIntensity: number; met: number }> = [
 ];
 const STRENGTH_DEFAULT_MET = 4.5;
 
-/** Fallback MET when no set data is available, keyed by ActivityType. */
+/** Fallback MET when no set data is available, keyed by WorkoutCategory. */
 export const ACTIVITY_TYPE_MET: Record<string, number> = {
-  strength: 4.5,
-  cardio: 7.0,
-  sport: 7.0,
-  mobility: 2.5,
-  custom: 5.0,
+  gym: 4.5,
+  cult_session: 8.0,
+  swimming: 7.0,
+  run: 9.0,
 };
 
 /** Active time per set + average rest - used to estimate session duration. */
@@ -167,11 +152,7 @@ export function calcCardioCalories(input: CardioInput, weightKg: number): Calori
   let met: number;
   let method: CalorieMethod;
 
-  if (input.distance && input.distance > 0 && (input.cardioMethod === 'cycling_bike')) {
-    const speedKmh = input.distance / duration_hrs;
-    met = cyclingSpeedToMET(speedKmh);
-    method = 'cardio_speed_met';
-  } else if (input.distance && input.distance > 0 && (!input.cardioMethod || input.cardioMethod === 'running' || input.cardioMethod === 'treadmill')) {
+  if (input.distance && input.distance > 0 && (!input.cardioMethod || input.cardioMethod === 'running')) {
     const speedKmh = input.distance / duration_hrs;
     met = speedToMET(speedKmh);
     method = 'cardio_speed_met';
@@ -189,14 +170,6 @@ export function calcCardioCalories(input: CardioInput, weightKg: number): Calori
     method,
     duration_hrs,
   };
-}
-
-/** Map cycling speed to MET using a cycling-specific lookup table. */
-export function cyclingSpeedToMET(speedKmh: number): number {
-  for (const entry of CYCLING_SPEED_MET) {
-    if (speedKmh <= entry.maxSpeedKmh) return entry.met;
-  }
-  return CYCLING_SPEED_MET[CYCLING_SPEED_MET.length - 1].met;
 }
 
 export interface StrengthSetInput {
