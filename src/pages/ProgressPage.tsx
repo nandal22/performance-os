@@ -8,6 +8,8 @@ import { toast } from 'sonner';
 import { exercisesService } from '@/services/exercises';
 import { strengthSetsService } from '@/services/strengthSets';
 import ExerciseProgressCard from '@/components/ExerciseProgressCard';
+import ExerciseProgressSheet from '@/components/ExerciseProgressSheet';
+import LogWorkoutSheet from '@/components/LogWorkoutSheet';
 import type { Exercise, StrengthSet } from '@/types';
 
 const MAIN_LIFTS = [
@@ -136,6 +138,8 @@ export default function ProgressPage() {
   const [loadingExercises, setLoadingExercises] = useState(true);
   const [loadingCards, setLoadingCards] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [historyExercise, setHistoryExercise] = useState<Exercise | null>(null);
+  const [logSheetOpen, setLogSheetOpen] = useState(false);
 
   useEffect(() => {
     exercisesService.getAll()
@@ -311,6 +315,13 @@ export default function ProgressPage() {
                             </ResponsiveContainer>
                           </div>
                         )}
+
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setHistoryExercise(card.exercise); }}
+                          className="text-[11px] font-semibold text-primary mt-2"
+                        >
+                          Full history →
+                        </button>
                       </div>
                     </div>
                   </motion.button>
@@ -338,14 +349,15 @@ export default function ProgressPage() {
           {search.trim() && (
             <div className="mt-2 space-y-1 max-h-64 overflow-y-auto">
               {filteredExercises.length > 0 ? filteredExercises.map(exercise => (
-                <button
-                  key={exercise.id}
-                  onClick={() => { setSelectedEx(exercise); setSearch(''); }}
-                  className="w-full grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.06] text-left transition-colors"
-                >
-                  <span className="text-sm text-white truncate">{exercise.name}</span>
+                <div key={exercise.id} className="w-full grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.06]">
+                  <button onClick={() => { setSelectedEx(exercise); setSearch(''); }} className="text-left min-w-0">
+                    <span className="text-sm text-white truncate block">{exercise.name}</span>
+                  </button>
                   <span className="text-[11px] text-muted-foreground capitalize flex-shrink-0">{exercise.category}</span>
-                </button>
+                  <button onClick={() => setHistoryExercise(exercise)} className="text-[11px] font-semibold text-primary flex-shrink-0">
+                    History
+                  </button>
+                </div>
               )) : (
                 <div className="py-5 text-center">
                   <p className="text-sm text-muted-foreground">No matching exercise</p>
@@ -416,6 +428,13 @@ export default function ProgressPage() {
                     </div>
                   )}
 
+                  <button
+                    onClick={() => selectedEx && setHistoryExercise(selectedEx)}
+                    className="text-[11px] font-semibold text-primary -mt-1"
+                  >
+                    Full history →
+                  </button>
+
                   <div>
                     <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2.5">Recent Sessions</p>
                     <div className="space-y-2">
@@ -446,6 +465,17 @@ export default function ProgressPage() {
           )}
         </section>
       </main>
+
+      <ExerciseProgressSheet
+        exercise={historyExercise}
+        onClose={() => setHistoryExercise(null)}
+        onLogSet={() => { setHistoryExercise(null); setLogSheetOpen(true); }}
+      />
+      <LogWorkoutSheet
+        open={logSheetOpen}
+        onClose={() => setLogSheetOpen(false)}
+        onSuccess={() => setLogSheetOpen(false)}
+      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { signOut } from '@/hooks/useAuth';
 import { activitiesService } from '@/services/activities';
@@ -10,6 +10,17 @@ import { Dumbbell, Plus, ChevronRight, Scale } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import LogWorkoutSheet from '@/components/LogWorkoutSheet';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
+import WeekStrip from '@/components/WeekStrip';
+import { sessionsThisWeekCount } from '@/lib/week';
+
+const MODERNIST = {
+  ground: '#f3f2f2',
+  ink: '#201e1d',
+  accent: '#ec3013',
+  accentTint: '#ffe0d9',
+  accentDeep: '#ae1800',
+  panel: '#eae9e9',
+};
 
 const DRAFT_KEY = 'perf-os-draft';
 
@@ -25,11 +36,11 @@ function readDraft(): DraftMeta | null {
   } catch { return null; }
 }
 
-const TYPE_CONFIG: Record<WorkoutCategory, { bg: string; icon: string }> = {
-  gym:          { bg: 'bg-blue-500/10',   icon: '💪' },
-  cult_session: { bg: 'bg-orange-500/10', icon: '🔥' },
-  swimming:     { bg: 'bg-cyan-500/10',   icon: '🏊' },
-  run:          { bg: 'bg-green-500/10',  icon: '🏃' },
+const TYPE_CONFIG: Record<WorkoutCategory, { mark: string }> = {
+  gym:          { mark: 'GYM' },
+  cult_session: { mark: 'CULT' },
+  swimming:     { mark: 'SWIM' },
+  run:          { mark: 'RUN' },
 };
 
 const SUB_TYPE_LABEL: Record<string, string> = {
@@ -70,6 +81,7 @@ export default function DashboardPage() {
   const [resumingDraft,    setResumingDraft]    = useState(false);
   const [selectedId,       setSelectedId]       = useState<string | null>(null);
   const [draft,            setDraft]            = useState<DraftMeta | null>(readDraft);
+  const [selectedDay,      setSelectedDay]      = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -88,22 +100,34 @@ export default function DashboardPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const thisWeekCount = sessionsThisWeekCount(recentActivities);
+  const lastSession = recentActivities[0] ?? null;
+
+  const dayFiltered = useMemo(() => {
+    if (!selectedDay) return recentActivities;
+    return recentActivities.filter(a => a.date === selectedDay);
+  }, [recentActivities, selectedDay]);
+
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen flex flex-col" style={{ background: MODERNIST.ground, color: MODERNIST.ink }}>
       {/* Header */}
-      <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-2xl px-4 pt-safe pb-4 flex items-center justify-between border-b border-white/[0.06]">
+      <header
+        className="sticky top-0 z-20 px-4 pt-safe pb-4 flex items-center justify-between"
+        style={{ background: MODERNIST.ground, borderBottom: `2px solid ${MODERNIST.ink}66` }}
+      >
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center">
-            <Dumbbell className="w-4 h-4 text-primary" />
+          <div className="w-8 h-8 flex items-center justify-center" style={{ border: `2px solid ${MODERNIST.ink}` }}>
+            <Dumbbell className="w-4 h-4" />
           </div>
           <div>
-            <h1 className="text-base font-bold text-white leading-tight tracking-tight">Performance OS</h1>
-            <p className="text-[11px] text-muted-foreground">{format(new Date(), 'EEEE, MMM d')}</p>
+            <h1 className="text-base font-800 leading-tight tracking-tight">Performance OS</h1>
+            <p className="text-[11px]" style={{ color: `${MODERNIST.ink}8c` }}>{format(new Date(), 'EEEE, MMM d')}</p>
           </div>
         </div>
         <button
           onClick={signOut}
-          className="text-xs text-muted-foreground hover:text-white transition-colors px-3 py-1.5 rounded-xl border border-white/[0.08] bg-white/[0.03]"
+          className="text-xs font-600 px-3 py-1.5"
+          style={{ border: `2px solid ${MODERNIST.ink}` }}
         >
           Sign out
         </button>
@@ -120,68 +144,98 @@ export default function DashboardPage() {
               exit={{ opacity: 0, scale: 0.96 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => { setResumingDraft(true); setShowSheet(true); }}
-              className="w-full flex items-center gap-3 rounded-2xl border border-primary/25 p-4 text-left glow-blue"
-              style={{ background: 'linear-gradient(135deg, hsl(217 91% 62% / 0.12) 0%, hsl(217 91% 62% / 0.05) 100%)' }}
+              className="w-full flex items-center gap-3 p-4 text-left"
+              style={{ border: `2px solid ${MODERNIST.accent}`, background: MODERNIST.accentTint, color: MODERNIST.accentDeep }}
             >
-              <span className="text-2xl">💪</span>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-primary">Continue Workout</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {draft.loggedSets.length} set{draft.loggedSets.length !== 1 ? 's' : ''} in progress
+                <p className="text-sm font-800 uppercase tracking-[0.06em]">In progress · Continue workout</p>
+                <p className="text-xs mt-0.5">
+                  {draft.loggedSets.length} set{draft.loggedSets.length !== 1 ? 's' : ''} logged
                 </p>
               </div>
-              <ChevronRight className="w-4 h-4 text-primary/70 flex-shrink-0" />
+              <ChevronRight className="w-4 h-4 flex-shrink-0" />
             </motion.button>
           )}
         </AnimatePresence>
 
+        {/* Head stats */}
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { label: 'This week', value: `${thisWeekCount}`, meta: `session${thisWeekCount !== 1 ? 's' : ''}` },
+            { label: 'Weight', value: latestWeight?.weight ? `${latestWeight.weight}` : '—', meta: latestWeight ? 'kg' : 'not logged' },
+            { label: 'Last session', value: lastSession ? format(new Date(lastSession.date + 'T12:00:00'), 'EEE') : '—', meta: lastSession ? activityTitle(lastSession) : 'none yet' },
+          ].map(stat => (
+            <div key={stat.label} className="p-3" style={{ border: `2px solid ${MODERNIST.ink}` }}>
+              <div className="text-[10px] font-800 uppercase tracking-[0.08em]" style={{ color: `${MODERNIST.ink}8c` }}>{stat.label}</div>
+              <div className="text-[22px] font-800 nums leading-tight">{stat.value}</div>
+              <div className="text-[11px] truncate" style={{ color: `${MODERNIST.ink}8c` }}>{stat.meta}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Week strip */}
+        <WeekStrip activities={recentActivities} selected={selectedDay} onSelect={setSelectedDay} />
+
         {/* Weight snapshot */}
         <Link
           to="/weight"
-          className="flex items-center gap-3 rounded-2xl glass p-3.5 active:scale-[0.98] transition-transform"
+          className="flex items-center gap-3 p-3.5"
+          style={{ border: `2px solid ${MODERNIST.ink}`, background: MODERNIST.panel }}
         >
-          <div className="w-9 h-9 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-            <Scale className="w-4 h-4 text-primary" />
+          <div className="w-9 h-9 flex items-center justify-center flex-shrink-0" style={{ border: `2px solid ${MODERNIST.ink}` }}>
+            <Scale className="w-4 h-4" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white">
+            <p className="text-sm font-800">
               {latestWeight?.weight ? `${latestWeight.weight} kg` : 'Log your weight'}
             </p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              {latestWeight ? format(new Date(latestWeight.date), 'MMM d') : 'Feeds calorie estimates'}
+            <p className="text-[11px] mt-0.5" style={{ color: `${MODERNIST.ink}8c` }}>
+              {latestWeight ? `Last logged ${format(new Date(latestWeight.date), 'MMM d')}` : 'Feeds calorie estimates'}
             </p>
           </div>
-          <ChevronRight className="w-4 h-4 text-white/20 flex-shrink-0" />
+          <ChevronRight className="w-4 h-4 flex-shrink-0" />
         </Link>
 
         {/* Workout history */}
         <motion.div variants={fadeUp} initial="hidden" animate="show">
           <div className="flex items-center justify-between mb-3 px-0.5">
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-              Workout History
+            <p className="text-[10px] font-800 uppercase tracking-[0.1em]">
+              {selectedDay ? `Sessions · ${format(new Date(selectedDay + 'T12:00:00'), 'MMM d')}` : 'Workout History'}
             </p>
-            {recentActivities.length > 0 && (
-              <span className="text-[10px] text-muted-foreground">{recentActivities.length}</span>
-            )}
+            <div className="flex items-center gap-3">
+              {recentActivities.length > 0 && (
+                <span className="text-[10px]" style={{ color: `${MODERNIST.ink}8c` }}>
+                  {selectedDay ? `${dayFiltered.length} of ${recentActivities.length}` : recentActivities.length}
+                </span>
+              )}
+              {selectedDay && (
+                <button onClick={() => setSelectedDay(null)} className="text-[11px] font-800" style={{ color: MODERNIST.accentDeep }}>
+                  Clear day filter
+                </button>
+              )}
+            </div>
           </div>
 
           {loading ? (
             <div className="space-y-2">
               {[1, 2, 3].map(i => (
-                <div key={i} className="h-[62px] rounded-2xl bg-white/[0.04] animate-pulse" />
+                <div key={i} className="h-[62px]" style={{ border: `2px solid ${MODERNIST.ink}22` }} />
               ))}
             </div>
-          ) : recentActivities.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-white/10 p-10 text-center">
-              <p className="text-3xl mb-2">🏋️</p>
-              <p className="text-sm text-muted-foreground">No workouts yet</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Tap <strong className="text-white">+</strong> to log your first workout
+          ) : dayFiltered.length === 0 ? (
+            <div className="p-10 text-center" style={{ border: `2px dashed ${MODERNIST.ink}55` }}>
+              <p className="text-sm" style={{ color: `${MODERNIST.ink}8c` }}>
+                {selectedDay ? `Nothing logged on ${format(new Date(selectedDay + 'T12:00:00'), 'MMM d')}.` : 'No workouts yet'}
               </p>
+              {!selectedDay && (
+                <p className="text-xs mt-1" style={{ color: `${MODERNIST.ink}8c` }}>
+                  Tap <strong>+</strong> to log your first workout
+                </p>
+              )}
             </div>
           ) : (
             <div className="space-y-2">
-              {recentActivities.map((a, i) => {
+              {dayFiltered.map((a, i) => {
                 const cfg = TYPE_CONFIG[a.type] ?? TYPE_CONFIG.gym;
                 const meta = activityMeta(a);
                 return (
@@ -189,19 +243,19 @@ export default function DashboardPage() {
                     key={a.id}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.06 + i * 0.05, type: 'spring', stiffness: 380, damping: 28 }}
+                    transition={{ delay: 0.03 + i * 0.03, type: 'spring', stiffness: 380, damping: 28 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => setSelectedId(a.id)}
-                    className="w-full rounded-2xl glass p-3.5 flex items-center gap-3.5 text-left"
+                    className="w-full p-3.5 flex items-center gap-3.5 text-left"
+                    style={{ border: `2px solid ${MODERNIST.ink}`, background: MODERNIST.panel }}
                   >
-                    {/* Colored icon container */}
-                    <div className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 ${cfg.bg}`}>
-                      <span className="text-xl">{cfg.icon}</span>
-                    </div>
+                    <span className="flex-none px-1.5 py-1 text-[10px] font-800 uppercase" style={{ border: `2px solid ${MODERNIST.ink}` }}>
+                      {cfg.mark}
+                    </span>
 
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-white truncate">{meta.title}</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                      <p className="text-sm font-800 truncate">{meta.title}</p>
+                      <p className="text-[11px] mt-0.5 truncate" style={{ color: `${MODERNIST.ink}8c` }}>
                         {format(new Date(a.date + 'T12:00:00'), 'EEE, MMM d')}
                         {a.duration ? ` · ${a.duration}min` : ''}
                         {meta.detail ? ` · ${meta.detail}` : ''}
@@ -209,12 +263,12 @@ export default function DashboardPage() {
                     </div>
 
                     {typeof meta.kcal === 'number' && meta.kcal > 0 && (
-                      <span className="text-[11px] font-semibold text-orange-300 nums bg-orange-400/10 border border-orange-400/15 rounded-full px-2 py-1">
+                      <span className="text-[11px] font-800 nums px-2 py-1" style={{ border: `2px solid ${MODERNIST.ink}` }}>
                         {Math.round(meta.kcal)} kcal
                       </span>
                     )}
 
-                    <ChevronRight className="w-4 h-4 text-white/20 flex-shrink-0" />
+                    <ChevronRight className="w-4 h-4 flex-shrink-0" />
                   </motion.button>
                 );
               })}
@@ -228,15 +282,14 @@ export default function DashboardPage() {
         whileTap={{ scale: 0.92 }}
         whileHover={{ scale: 1.05 }}
         onClick={() => { setResumingDraft(false); setShowSheet(true); }}
-        style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' }}
-        className="fixed right-5 w-14 h-14 bg-primary rounded-full flex items-center justify-center z-30"
+        style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))', background: MODERNIST.accent, border: `2px solid ${MODERNIST.ink}` }}
+        className="fixed right-5 w-14 h-14 flex items-center justify-center z-30"
         aria-label="Log workout"
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ delay: 0.3, type: 'spring', stiffness: 400, damping: 22 }}
       >
-        <div className="absolute inset-0 rounded-full bg-primary opacity-40 animate-ping" style={{ animationDuration: '2.5s' }} />
-        <Plus className="w-6 h-6 text-black relative z-10" />
+        <Plus className="w-6 h-6 relative z-10" style={{ color: MODERNIST.ground }} />
       </motion.button>
 
       {/* Log Workout Sheet */}
