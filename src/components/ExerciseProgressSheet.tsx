@@ -10,6 +10,7 @@ interface Props {
   exercise: { id: string; name: string } | null;
   onClose: () => void;
   onTrackToggle?: (id: string, tracked: boolean) => void;
+  onLogSet?: (exercise: { id: string; name: string }) => void;
 }
 
 interface SessionData {
@@ -20,7 +21,7 @@ interface SessionData {
   estMax1RM: number;
 }
 
-export default function ExerciseProgressSheet({ exercise, onClose, onTrackToggle }: Props) {
+export default function ExerciseProgressSheet({ exercise, onClose, onTrackToggle, onLogSet }: Props) {
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [loadedExerciseId, setLoadedExerciseId] = useState<string | null>(null);
   const [trackedByExercise, setTrackedByExercise] = useState<Record<string, boolean>>({});
@@ -88,32 +89,47 @@ export default function ExerciseProgressSheet({ exercise, onClose, onTrackToggle
   }));
 
   const bestWeight = sessions.length > 0 ? Math.max(...sessions.map(s => s.maxWeight)) : 0;
-  const bestOneRM  = sessions.length > 0 ? Math.max(...sessions.map(s => s.estMax1RM)) : 0;
+  const ordered = sessions.slice().reverse(); // newest first
+  const latest = ordered[0] ?? null;
+  const previous = ordered[1] ?? null;
+  const prTrend = latest && previous
+    ? latest.maxWeight > previous.maxWeight
+      ? `+${(latest.maxWeight - previous.maxWeight).toFixed(1)} kg on the last PR`
+      : `Holding at ${bestWeight} kg`
+    : latest ? 'First logged session' : '';
+
+  const INK = '#201e1d';
+  const GROUND = '#f3f2f2';
+  const MUTED = 'rgba(32,30,29,0.55)';
+  const RULE = 'rgba(32,30,29,0.15)';
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+    <div className="fixed inset-0 z-[60] flex items-end md:items-center md:justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
-      <div className="relative w-full max-h-[90vh] bg-[#111111] rounded-t-3xl flex flex-col overflow-hidden max-w-lg mx-auto">
-        {/* Handle */}
-        <div className="flex-shrink-0 flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 bg-white/20 rounded-full" />
-        </div>
-
+      <div
+        className="relative w-full md:max-w-[620px] max-h-[90vh] flex flex-col overflow-hidden max-w-lg mx-auto"
+        style={{ background: GROUND, color: INK, border: `2px solid ${INK}`, boxShadow: '0 12px 32px rgba(45,43,43,0.25)' }}
+      >
         {/* Header */}
-        <div className="flex-shrink-0 flex items-center justify-between px-4 pt-2 pb-3 border-b border-white/5">
-          <h2 className="text-base font-semibold text-white flex-1 min-w-0 truncate pr-2">{exercise.name}</h2>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              onClick={handleToggleTracked}
-              className={`p-1.5 rounded-lg transition-colors ${tracked ? 'text-yellow-400' : 'text-white/30 hover:text-white/60'}`}
-            >
-              <Star className={`w-4 h-4 ${tracked ? 'fill-yellow-400' : ''}`} />
+        <div className="flex-shrink-0 flex items-start justify-between gap-3 px-4 pt-4 pb-3" style={{ borderBottom: `2px solid ${INK}` }}>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-800 uppercase tracking-[0.12em]" style={{ color: MUTED }}>Exercise history</p>
+            <h2 className="text-2xl font-800 truncate">{exercise.name}</h2>
+            <p className="text-[13px] mt-0.5" style={{ color: MUTED }}>
+              {latest ? `Last logged ${format(new Date(latest.date + 'T12:00:00'), 'MMM d')}` : 'Not logged yet'}
+            </p>
+          </div>
+          <div className="text-right flex-none">
+            <p className="text-[10px] font-800 uppercase tracking-[0.1em]" style={{ color: MUTED }}>Max PR</p>
+            <p className="text-xl font-800 nums">{bestWeight > 0 ? `${bestWeight} kg` : '—'}</p>
+            {prTrend && <p className="text-[11px]" style={{ color: '#ae1800' }}>{prTrend}</p>}
+          </div>
+          <div className="flex items-center gap-1 flex-none">
+            <button onClick={handleToggleTracked} className="p-1.5" style={{ color: tracked ? '#ae1800' : MUTED }}>
+              <Star className="w-4 h-4" fill={tracked ? '#ae1800' : 'none'} />
             </button>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-white transition-colors"
-            >
+            <button onClick={onClose} className="p-1.5" style={{ color: MUTED }}>
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -123,56 +139,27 @@ export default function ExerciseProgressSheet({ exercise, onClose, onTrackToggle
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
           {loading ? (
             <div className="space-y-2">
-              {[1, 2, 3].map(i => <div key={i} className="h-12 rounded-xl bg-white/5 animate-pulse" />)}
+              {[1, 2, 3].map(i => <div key={i} className="h-12" style={{ border: `2px solid ${RULE}` }} />)}
             </div>
           ) : sessions.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-white/10 p-10 text-center">
-              <p className="text-3xl mb-2">📊</p>
-              <p className="text-sm text-muted-foreground">No sets logged for this exercise yet</p>
+            <div className="p-10 text-center" style={{ border: `2px dashed ${MUTED}` }}>
+              <p className="text-sm" style={{ color: MUTED }}>
+                No sets logged for {exercise.name} yet. Log one and it starts a history here.
+              </p>
             </div>
           ) : (
             <>
-              {/* Best stats */}
-              <div className="grid grid-cols-3 gap-2">
-                <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-center">
-                  <p className="text-lg font-bold text-white">{bestWeight}</p>
-                  <p className="text-[10px] text-muted-foreground">Best kg</p>
-                </div>
-                <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-center">
-                  <p className="text-lg font-bold text-white">{bestOneRM}</p>
-                  <p className="text-[10px] text-muted-foreground">Est. 1RM</p>
-                </div>
-                <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-center">
-                  <p className="text-lg font-bold text-white">{sessions.length}</p>
-                  <p className="text-[10px] text-muted-foreground">Sessions</p>
-                </div>
-              </div>
-
-              {/* Weight progression chart */}
               {chartData.length > 1 && (
-                <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
-                  <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">Weight Progression</p>
+                <div className="p-4" style={{ border: `2px solid ${INK}` }}>
+                  <p className="text-[11px] font-800 uppercase tracking-[0.1em] mb-3" style={{ color: MUTED }}>Weight progression</p>
                   <ResponsiveContainer width="100%" height={120}>
                     <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                      <Line
-                        type="monotone"
-                        dataKey="weight"
-                        stroke="hsl(217 91% 60%)"
-                        strokeWidth={2}
-                        dot={false}
-                        activeDot={{ r: 4 }}
-                      />
-                      <XAxis
-                        dataKey="date"
-                        tick={{ fill: 'hsl(220 9% 45%)', fontSize: 10 }}
-                        axisLine={false}
-                        tickLine={false}
-                        interval="preserveStartEnd"
-                      />
+                      <Line type="monotone" dataKey="weight" stroke="#ec3013" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                      <XAxis dataKey="date" tick={{ fill: MUTED, fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
                       <YAxis hide domain={['auto', 'auto']} />
                       <Tooltip
-                        cursor={{ stroke: 'rgba(255,255,255,0.1)' }}
-                        contentStyle={{ background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }}
+                        cursor={{ stroke: RULE }}
+                        contentStyle={{ background: GROUND, border: `2px solid ${INK}`, borderRadius: 0, fontSize: 12 }}
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         formatter={(v: any) => [`${Number(v ?? 0)} kg`, 'Max weight'] as [string, string]}
                       />
@@ -181,21 +168,30 @@ export default function ExerciseProgressSheet({ exercise, onClose, onTrackToggle
                 </div>
               )}
 
-              {/* Recent sessions */}
               <div>
-                <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Recent Sessions</p>
+                <p className="text-[11px] font-800 uppercase tracking-[0.1em] mb-2" style={{ color: MUTED }}>Recent sessions</p>
                 <div className="space-y-1.5">
-                  {sessions.slice(-10).reverse().map(s => (
-                    <div key={s.date} className="flex items-center justify-between rounded-xl bg-white/5 border border-white/8 px-3 py-2.5">
-                      <div>
-                        <p className="text-sm text-white">{format(new Date(s.date + 'T12:00:00'), 'MMM d, yyyy')}</p>
-                        <p className="text-xs text-muted-foreground">{s.totalSets} sets · {s.totalReps} reps</p>
+                  {ordered.slice(0, 10).map((s, i) => (
+                    <div key={s.date} className="px-3 py-2.5" style={{ border: `2px solid ${INK}`, background: '#eae9e9' }}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-800">{format(new Date(s.date + 'T12:00:00'), 'MMM d, yyyy')}</p>
+                          {i === 0 && (
+                            <span className="px-1.5 py-0.5 text-[9px] font-800 uppercase" style={{ background: INK, color: GROUND }}>
+                              Latest
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs" style={{ color: MUTED }}>
+                          Top set {s.maxWeight} kg · {s.totalReps.toLocaleString()} kg volume
+                        </p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-white">{s.maxWeight} kg</p>
-                        {s.estMax1RM > 0 && (
-                          <p className="text-[10px] text-muted-foreground">~{s.estMax1RM} 1RM</p>
-                        )}
+                      <div className="flex flex-wrap gap-1.5">
+                        {Array.from({ length: s.totalSets }).map((_, idx) => (
+                          <span key={idx} className="px-2 py-1 text-xs font-600 nums" style={{ border: `2px solid ${INK}` }}>
+                            {s.maxWeight} × {Math.round(s.totalReps / Math.max(s.totalSets, 1))}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   ))}
@@ -203,6 +199,20 @@ export default function ExerciseProgressSheet({ exercise, onClose, onTrackToggle
               </div>
             </>
           )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex-shrink-0 flex gap-2 px-4 py-3" style={{ borderTop: `2px solid ${INK}` }}>
+          <button
+            onClick={() => onLogSet?.(exercise)}
+            className="h-11 flex-1 px-4 text-sm font-800 text-left"
+            style={{ background: INK, color: GROUND, border: `2px solid ${INK}` }}
+          >
+            Log a set for this
+          </button>
+          <button onClick={onClose} className="h-11 px-4 text-sm font-800" style={{ border: `2px solid ${INK}` }}>
+            Close
+          </button>
         </div>
       </div>
     </div>
