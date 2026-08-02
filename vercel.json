@@ -1,13 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "redirects": [
-    {
-      "source": "/:path*",
-      "has": [{ "type": "host", "value": "tracker.sachinnandal.me" }],
-      "destination": "https://training.sachinnandal.me/:path*",
-      "permanent": true
-    }
-  ],
   "rewrites": [
     {
       "source": "/:path((?!_vercel/).*)",
