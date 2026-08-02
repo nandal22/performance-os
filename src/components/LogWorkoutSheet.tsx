@@ -15,6 +15,17 @@ import ExerciseProgressCard from './ExerciseProgressCard';
 
 const DRAFT_KEY = 'perf-os-draft';
 
+const INK = '#201e1d';
+const GROUND = '#f3f2f2';
+const PANEL = '#eae9e9';
+const ACCENT = '#ec3013';
+const ACCENT_TINT = '#ffe0d9';
+const ACCENT_DEEP = '#ae1800';
+const MUTED = 'rgba(32,30,29,0.55)';
+const RULE = 'rgba(32,30,29,0.15)';
+
+const inputStyle = { border: `2px solid ${INK}`, background: GROUND, color: INK, colorScheme: 'light' as const };
+
 type RecentSession = { date: string; sets: { reps: number; weight: number; set_number: number }[] };
 type LoadMode = 'total' | 'dumbbell_pair' | 'barbell_plates' | 'bodyweight';
 
@@ -556,45 +567,52 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-end">
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+        <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
-        <div className="relative w-full max-h-[92vh] bg-[#111111] rounded-t-3xl flex flex-col overflow-hidden max-w-lg mx-auto">
+        <div
+          className="relative w-full max-h-[92vh] flex flex-col overflow-hidden max-w-lg mx-auto"
+          style={{ background: GROUND, color: INK, border: `2px solid ${INK}`, boxShadow: '0 12px 32px rgba(45,43,43,0.25)' }}
+        >
           {/* Handle */}
           <div className="flex-shrink-0 flex justify-center pt-3 pb-1">
-            <div className="w-10 h-1 bg-white/20 rounded-full" />
+            <div className="w-10 h-1" style={{ background: INK }} />
           </div>
 
           {/* Header */}
-          <div className="flex-shrink-0 flex items-center justify-between px-4 pt-2 pb-3 border-b border-white/5">
+          <div className="flex-shrink-0 flex items-center justify-between px-4 pt-2 pb-3" style={{ borderBottom: `2px solid ${INK}` }}>
             <div>
-              <h2 className="text-base font-semibold text-white">Active Workout</h2>
+              <h2 className="text-base font-800 leading-tight tracking-tight">Active Workout</h2>
               {loggedSets.length > 0 && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[11px]" style={{ color: MUTED }}>
                   {loggedSets.length} set{loggedSets.length !== 1 ? 's' : ''} logged
                 </p>
               )}
             </div>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-white transition-colors"
-            >
+            <button onClick={onClose} className="p-1.5" style={{ color: MUTED }}>
               <X className="w-4 h-4" />
             </button>
           </div>
 
           {/* Draft restore banner */}
           {draftToRestore && (
-            <div className="mx-4 mt-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 p-3 flex items-center gap-3">
+            <div
+              className="mx-4 mt-3 p-3 flex items-center gap-3"
+              style={{ border: `2px solid ${ACCENT}`, background: ACCENT_TINT, color: ACCENT_DEEP }}
+            >
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-yellow-400">Unfinished workout found</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[11px] font-800 uppercase tracking-[0.06em]">Unfinished workout found</p>
+                <p className="text-xs mt-0.5">
                   {draftToRestore.loggedSets.length} sets · {format(new Date(draftToRestore.savedAt), 'h:mm a')}
                 </p>
               </div>
-              <button onClick={restoreDraft} className="text-xs text-yellow-400 font-semibold px-2 py-1 rounded-lg bg-yellow-500/10">
+              <button
+                onClick={restoreDraft}
+                className="text-xs font-800 px-2 py-1"
+                style={{ border: `2px solid ${ACCENT_DEEP}` }}
+              >
                 Restore
               </button>
-              <button onClick={discardDraft} className="text-xs text-muted-foreground">
+              <button onClick={discardDraft} className="text-xs font-800" style={{ color: MUTED }}>
                 Discard
               </button>
             </div>
@@ -604,17 +622,18 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
           <div className="flex-1 overflow-y-auto">
 
             {/* Session meta */}
-            <div className="px-4 pt-4 pb-3 space-y-3 border-b border-white/5">
+            <div className="px-4 pt-4 pb-3 space-y-3" style={{ borderBottom: `2px solid ${INK}` }}>
               <div className="flex gap-1.5 flex-wrap">
                 {TYPES.map(t => (
                   <button
                     key={t.value}
                     onClick={() => setType(t.value)}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                      type === t.value
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-white/5 text-muted-foreground hover:bg-white/10'
-                    }`}
+                    className="flex items-center gap-1 px-2.5 py-1 text-xs font-800"
+                    style={{
+                      border: `2px solid ${INK}`,
+                      background: type === t.value ? INK : 'transparent',
+                      color: type === t.value ? GROUND : INK,
+                    }}
                   >
                     {t.icon} {t.label}
                   </button>
@@ -626,11 +645,12 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                     <button
                       key={st.value}
                       onClick={() => setSubType(st.value)}
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                        subType === st.value
-                          ? 'bg-orange-400 text-black'
-                          : 'bg-white/5 text-muted-foreground hover:bg-white/10'
-                      }`}
+                      className="px-2.5 py-1 text-xs font-800"
+                      style={{
+                        border: `2px solid ${INK}`,
+                        background: subType === st.value ? ACCENT : 'transparent',
+                        color: subType === st.value ? GROUND : INK,
+                      }}
                     >
                       {st.label}
                     </button>
@@ -641,7 +661,8 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                 type="date"
                 value={date}
                 onChange={e => setDate(e.target.value)}
-                className="bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-primary/50"
+                className="px-3 py-1.5 text-sm focus:outline-none"
+                style={inputStyle}
               />
             </div>
 
@@ -650,37 +671,39 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
               <div className="px-4 pt-4 pb-3 space-y-4">
 
                 {/* Quick-add card */}
-                <div className="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-3">
-                  <p className="text-xs text-muted-foreground uppercase tracking-widest">Log a set</p>
+                <div className="p-4 space-y-3" style={{ border: `2px solid ${INK}` }}>
+                  <p className="text-[10px] font-800 uppercase tracking-[0.1em]">Log a set</p>
 
                   {/* Exercise selector */}
                   <div className="relative">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => { setShowPicker(p => !p); setExSearch(''); }}
-                        className="flex-1 flex items-center justify-between bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm"
+                        className="flex-1 flex items-center justify-between px-3 py-2.5 text-sm"
+                        style={{ border: `2px solid ${INK}`, background: PANEL }}
                       >
-                        <span className={currentEx ? 'text-white font-medium' : 'text-white/30'}>
+                        <span className="font-800" style={currentEx ? undefined : { color: MUTED }}>
                           {currentEx?.name ?? 'Choose exercise…'}
                         </span>
-                        <ChevronDown className="w-4 h-4 text-white/30 flex-shrink-0" />
+                        <ChevronDown className="w-4 h-4 flex-shrink-0" />
                       </button>
                       {currentEx && (
                         <>
                           <button
                             onClick={() => toggleTrack(currentEx.id)}
-                            className={`p-2 rounded-xl border transition-colors ${
-                              trackedIds.has(currentEx.id)
-                                ? 'border-yellow-500/30 text-yellow-400'
-                                : 'border-white/10 text-white/20 hover:text-white/50'
-                            }`}
+                            className="p-2"
+                            style={{
+                              border: `2px solid ${INK}`,
+                              color: trackedIds.has(currentEx.id) ? ACCENT_DEEP : MUTED,
+                            }}
                           >
-                            <Star className={`w-4 h-4 ${trackedIds.has(currentEx.id) ? 'fill-yellow-400' : ''}`} />
+                            <Star className="w-4 h-4" fill={trackedIds.has(currentEx.id) ? ACCENT_DEEP : 'none'} />
                           </button>
                           {trackedIds.has(currentEx.id) && (
                             <button
                               onClick={() => setShowProgress(true)}
-                              className="p-2 rounded-xl border border-primary/30 text-primary hover:bg-primary/10 transition-colors"
+                              className="p-2"
+                              style={{ border: `2px solid ${INK}` }}
                             >
                               <TrendingUp className="w-4 h-4" />
                             </button>
@@ -690,14 +713,18 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                     </div>
 
                     {showPicker && (
-                      <div className="absolute top-full left-0 right-0 z-20 bg-[#1c1c1c] border border-white/10 rounded-xl mt-1 shadow-2xl overflow-hidden">
+                      <div
+                        className="absolute top-full left-0 right-0 z-20 mt-1 overflow-hidden"
+                        style={{ background: GROUND, border: `2px solid ${INK}`, boxShadow: '0 12px 32px rgba(45,43,43,0.25)' }}
+                      >
                         <input
                           autoFocus
                           type="text"
                           placeholder="Search exercises…"
                           value={exSearch}
                           onChange={e => setExSearch(e.target.value)}
-                          className="w-full bg-transparent px-3 py-2.5 text-sm text-white placeholder:text-white/30 border-b border-white/10 focus:outline-none"
+                          className="w-full px-3 py-2.5 text-sm focus:outline-none"
+                          style={{ background: GROUND, color: INK, borderBottom: `2px solid ${INK}`, colorScheme: 'light' }}
                         />
                         <div className="max-h-48 overflow-y-auto">
                           {filteredExercises.map(ex => (
@@ -708,29 +735,31 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                                 setShowPicker(false);
                                 setTimeout(() => repsRef.current?.focus(), 50);
                               }}
-                              className="w-full text-left px-3 py-2.5 text-sm text-white hover:bg-white/5 flex items-center gap-2"
+                              className="w-full text-left px-3 py-2.5 text-sm font-600 flex items-center gap-2"
+                              style={{ borderBottom: `2px solid ${RULE}` }}
                             >
                               <span className="flex-1">{ex.name}</span>
                               {trackedIds.has(ex.id) && (
-                                <Star className="w-3 h-3 text-yellow-400 fill-yellow-400 flex-shrink-0" />
+                                <Star className="w-3 h-3 flex-shrink-0" fill={ACCENT_DEEP} style={{ color: ACCENT_DEEP }} />
                               )}
-                              <span className="text-xs text-muted-foreground flex-shrink-0">{ex.category}</span>
+                              <span className="text-xs flex-shrink-0" style={{ color: MUTED }}>{ex.category}</span>
                             </button>
                           ))}
                           {canCreateEx && (
-                            <div className="border-t border-white/10">
+                            <div style={{ borderTop: `2px solid ${INK}` }}>
                               <div className="px-3 pt-2 pb-1">
-                                <p className="text-[10px] text-muted-foreground mb-1.5">Category</p>
+                                <p className="text-[10px] font-800 uppercase tracking-[0.08em] mb-1.5" style={{ color: MUTED }}>Category</p>
                                 <div className="flex flex-wrap gap-1">
                                   {(['push','pull','legs','core','cardio','mobility','other'] as ExerciseCategory[]).map(cat => (
                                     <button
                                       key={cat}
                                       onMouseDown={e => { e.preventDefault(); setNewExCategory(cat); }}
-                                      className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize transition-colors ${
-                                        newExCategory === cat
-                                          ? 'bg-primary text-primary-foreground'
-                                          : 'bg-white/10 text-white/60 hover:bg-white/20'
-                                      }`}
+                                      className="px-2 py-0.5 text-xs font-800 capitalize"
+                                      style={{
+                                        border: `2px solid ${INK}`,
+                                        background: newExCategory === cat ? INK : 'transparent',
+                                        color: newExCategory === cat ? GROUND : INK,
+                                      }}
                                     >
                                       {cat}
                                     </button>
@@ -740,7 +769,8 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                               <button
                                 onMouseDown={createExercise}
                                 disabled={creatingEx}
-                                className="w-full text-left px-3 py-2.5 text-sm text-primary hover:bg-white/5 flex items-center gap-2 disabled:opacity-50"
+                                className="w-full text-left px-3 py-2.5 text-sm font-800 flex items-center gap-2 disabled:opacity-50"
+                                style={{ color: ACCENT_DEEP }}
                               >
                                 <Plus className="w-4 h-4 flex-shrink-0" />
                                 {creatingEx ? 'Creating…' : `Create "${exSearch.trim()}" · ${newExCategory}`}
@@ -748,7 +778,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                             </div>
                           )}
                           {filteredExercises.length === 0 && !canCreateEx && (
-                            <p className="px-3 py-3 text-sm text-muted-foreground">No exercises found</p>
+                            <p className="px-3 py-3 text-sm" style={{ color: MUTED }}>No exercises found</p>
                           )}
                         </div>
                       </div>
@@ -759,13 +789,16 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                   <ExerciseProgressCard sessions={recentSessions} />
 
                   {/* Reps × Weight */}
-                  <div className="rounded-2xl border border-primary/25 bg-primary/[0.08] p-3 shadow-[0_12px_30px_rgba(0,0,0,0.18)]">
+                  <div className="p-3" style={{ border: `2px solid ${ACCENT}`, background: ACCENT_TINT }}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Weight entry</p>
-                        <p className="mt-0.5 text-sm font-semibold text-white">Choose one mode</p>
+                        <p className="text-[10px] font-800 uppercase tracking-[0.12em]" style={{ color: ACCENT_DEEP }}>Weight entry</p>
+                        <p className="mt-0.5 text-sm font-800">Choose one mode</p>
                       </div>
-                      <span className="shrink-0 rounded-full bg-primary px-2.5 py-1 text-[11px] font-bold text-primary-foreground">
+                      <span
+                        className="shrink-0 px-2.5 py-1 text-[11px] font-800 uppercase"
+                        style={{ border: `2px solid ${INK}`, background: INK, color: GROUND }}
+                      >
                         {activeLoadMode.label}
                       </span>
                     </div>
@@ -779,14 +812,15 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                             type="button"
                             aria-pressed={selected}
                             onClick={() => setLoadMode(option.value)}
-                            className={`min-h-[64px] rounded-xl border px-3 py-2 text-left transition-all active:scale-[0.98] ${
-                              selected
-                                ? 'border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/20'
-                                : 'border-white/10 bg-white/[0.06] text-white hover:border-white/20'
-                            }`}
+                            className="min-h-[64px] px-3 py-2 text-left transition-transform active:scale-[0.98]"
+                            style={{
+                              border: `2px solid ${INK}`,
+                              background: selected ? INK : GROUND,
+                              color: selected ? GROUND : INK,
+                            }}
                           >
-                            <span className="block text-sm font-bold leading-tight">{option.label}</span>
-                            <span className={`mt-1 block text-[11px] leading-tight ${selected ? 'text-primary-foreground/80' : 'text-white/55'}`}>
+                            <span className="block text-sm font-800 leading-tight">{option.label}</span>
+                            <span className="mt-1 block text-[11px] leading-tight opacity-70">
                               {option.detail}
                             </span>
                           </button>
@@ -794,26 +828,26 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                       })}
                     </div>
 
-                    <p className="mt-2 text-xs leading-snug text-white/70">
+                    <p className="mt-2 text-xs leading-snug">
                       {LOAD_MODE_HELP[loadMode]}
                     </p>
                     {selectedEquipment && (
-                      <p className="mt-1 text-[11px] text-white/45">
+                      <p className="mt-1 text-[11px]" style={{ color: ACCENT_DEEP }}>
                         Auto-selected from exercise type: {selectedEquipment}
                       </p>
                     )}
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold text-white/75">Set details</p>
-                    <span className="rounded-full bg-white/[0.06] px-2 py-1 text-[11px] font-semibold text-white/60">
+                    <p className="text-[10px] font-800 uppercase tracking-[0.1em]">Set details</p>
+                    <span className="px-2 py-1 text-[11px] font-800" style={{ border: `2px solid ${INK}` }}>
                       {activeLoadMode.label}
                     </span>
                   </div>
 
                   <div className="flex items-end gap-2">
                     <div className="flex-1">
-                      <label className="text-xs text-muted-foreground block mb-1">Reps</label>
+                      <label className="text-[10px] font-800 uppercase tracking-[0.08em] block mb-1" style={{ color: MUTED }}>Reps</label>
                       <input
                         ref={repsRef}
                         type="number"
@@ -822,12 +856,13 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                         value={currentReps}
                         onChange={e => setCurrentReps(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && logSet()}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-lg font-bold text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 text-center"
+                        className="w-full px-3 py-3 text-lg font-800 nums focus:outline-none text-center"
+                        style={inputStyle}
                       />
                     </div>
-                    <p className="text-white/30 pb-3">×</p>
+                    <p className="pb-3 font-800" style={{ color: MUTED }}>×</p>
                     <div className="flex-1">
-                      <label className="text-xs text-muted-foreground block mb-1">{weightInputLabel}</label>
+                      <label className="text-[10px] font-800 uppercase tracking-[0.08em] block mb-1" style={{ color: MUTED }}>{weightInputLabel}</label>
                       <input
                         type="number"
                         inputMode="decimal"
@@ -835,78 +870,82 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                         value={currentWeight}
                         onChange={e => setCurrentWeight(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && logSet()}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-lg font-bold text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 text-center"
+                        className="w-full px-3 py-3 text-lg font-800 nums focus:outline-none text-center"
+                        style={inputStyle}
                       />
                     </div>
                   </div>
 
                   {loadMode === 'barbell_plates' && (
                     <div>
-                      <label className="text-xs text-muted-foreground block mb-1">Rod / bar weight (kg)</label>
+                      <label className="text-[10px] font-800 uppercase tracking-[0.08em] block mb-1" style={{ color: MUTED }}>Rod / bar weight (kg)</label>
                       <input
                         type="number"
                         inputMode="decimal"
                         placeholder="20"
                         value={barWeight}
                         onChange={e => setBarWeight(e.target.value)}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50"
+                        className="w-full px-3 py-2.5 text-sm nums focus:outline-none"
+                        style={inputStyle}
                       />
                     </div>
                   )}
 
                   {loadMode === 'bodyweight' && (
                     <div>
-                      <label className="text-xs text-muted-foreground block mb-1">Bodyweight used (%)</label>
+                      <label className="text-[10px] font-800 uppercase tracking-[0.08em] block mb-1" style={{ color: MUTED }}>Bodyweight used (%)</label>
                       <input
                         type="number"
                         inputMode="decimal"
                         placeholder="100"
                         value={bodyFactor}
                         onChange={e => setBodyFactor(e.target.value)}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50"
+                        className="w-full px-3 py-2.5 text-sm nums focus:outline-none"
+                        style={inputStyle}
                       />
                     </div>
                   )}
 
-                  <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] px-3 py-2">
-                    <p className="text-xs text-white/65">
-                      Saved as: <span className="font-semibold text-white">{loadPreview.load_label}</span>
+                  <div className="px-3 py-2" style={{ border: `2px solid ${RULE}`, background: PANEL }}>
+                    <p className="text-xs" style={{ color: MUTED }}>
+                      Saved as: <span className="font-800" style={{ color: INK }}>{loadPreview.load_label}</span>
                     </p>
-                    <p className="mt-1 text-xs text-white/65">
-                      Effective load: <span className="font-semibold text-white">{Math.round(loadPreview.weight * 10) / 10} kg</span>
+                    <p className="mt-1 text-xs" style={{ color: MUTED }}>
+                      Effective load: <span className="font-800 nums" style={{ color: INK }}>{Math.round(loadPreview.weight * 10) / 10} kg</span>
                     </p>
                     {loadMode === 'bodyweight' && !bodyWeightKg && (
-                      <p className="text-[11px] text-orange-300 mt-1">Log body weight in metrics for bodyweight calorie estimates.</p>
+                      <p className="text-[11px] font-800 mt-1" style={{ color: ACCENT_DEEP }}>Log body weight in metrics for bodyweight calorie estimates.</p>
                     )}
                   </div>
 
                   <button
                     onClick={logSet}
-                    className={`w-full py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 ${
-                      justAdded
-                        ? 'bg-green-500 text-white scale-[0.97]'
-                        : 'bg-primary text-primary-foreground active:scale-[0.97]'
-                    }`}
+                    className="w-full py-3.5 font-800 text-sm transition-transform duration-200 flex items-center justify-center gap-2 active:scale-[0.97]"
+                    style={{
+                      border: `2px solid ${INK}`,
+                      background: justAdded ? INK : ACCENT,
+                      color: GROUND,
+                    }}
                   >
                     {justAdded ? <><CheckCircle2 className="w-4 h-4" /> Set Logged!</> : '+ Log Set'}
                   </button>
                 </div>
 
                 {loggedSets.length > 0 && (
-                  <div className="rounded-2xl bg-orange-400/10 border border-orange-400/20 p-3">
+                  <div className="p-3" style={{ border: `2px solid ${ACCENT}`, background: ACCENT_TINT }}>
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-xs font-semibold text-orange-200">Burn estimate</p>
-                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                        <p className="text-[10px] font-800 uppercase tracking-[0.1em]" style={{ color: ACCENT_DEEP }}>Burn estimate</p>
+                        <p className="text-[11px] mt-0.5">
                           {strengthEstimateCopy}
                         </p>
                       </div>
-                      <p className="text-lg font-bold text-white nums">
+                      <p className="text-lg font-800 nums flex-none">
                         {strengthCalories ? `${strengthCalories.calories} kcal` : '-- kcal'}
                       </p>
                     </div>
                     {!bodyWeightKg && (
-                      <p className="text-[11px] text-orange-200 mt-2">Add body weight in metrics to calculate this.</p>
+                      <p className="text-[11px] font-800 mt-2" style={{ color: ACCENT_DEEP }}>Add body weight in metrics to calculate this.</p>
                     )}
                   </div>
                 )}
@@ -914,68 +953,61 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                 {/* Accumulated sets */}
                 {exerciseOrder.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground uppercase tracking-widest">
+                    <p className="text-[10px] font-800 uppercase tracking-[0.1em]">
                       This session · {loggedSets.length} set{loggedSets.length !== 1 ? 's' : ''}
                     </p>
                     {exerciseOrder.map(exId => (
-                      <div key={exId} className="rounded-xl border border-white/8 overflow-hidden">
-                        <p className="px-3 py-2 text-xs font-semibold text-white/60 bg-white/5 border-b border-white/8">
+                      <div key={exId} className="overflow-hidden" style={{ border: `2px solid ${INK}` }}>
+                        <p className="px-3 py-2 text-xs font-800" style={{ background: INK, color: GROUND }}>
                           {grouped[exId].name}
                         </p>
                         {grouped[exId].sets.map((s, i) => (
-                          <div
-                            key={s.uid}
-                            className="border-b border-white/5 last:border-0"
-                          >
+                          <div key={s.uid} style={{ borderTop: i === 0 ? undefined : `2px solid ${RULE}`, background: PANEL }}>
                             {editUid === s.uid ? (
                               // Inline edit row
                               <div className="flex items-center gap-2 px-3 py-2">
-                                <span className="text-xs text-muted-foreground w-5 flex-shrink-0">S{i + 1}</span>
+                                <span className="text-xs font-800 w-5 flex-shrink-0" style={{ color: MUTED }}>S{i + 1}</span>
                                 <input
                                   autoFocus
                                   type="number"
                                   inputMode="numeric"
                                   value={editReps}
                                   onChange={e => setEditReps(e.target.value)}
-                                  className="w-14 bg-white/10 border border-white/20 rounded-lg px-2 py-1 text-sm text-white text-center focus:outline-none"
+                                  className="w-14 px-2 py-1 text-sm nums text-center focus:outline-none"
+                                  style={inputStyle}
                                   placeholder="reps"
                                 />
-                                <span className="text-white/30 text-xs">×</span>
+                                <span className="text-xs font-800" style={{ color: MUTED }}>×</span>
                                 <input
                                   type="number"
                                   inputMode="decimal"
                                   value={editWeight}
                                   onChange={e => setEditWeight(e.target.value)}
-                                  className="w-16 bg-white/10 border border-white/20 rounded-lg px-2 py-1 text-sm text-white text-center focus:outline-none"
+                                  className="w-16 px-2 py-1 text-sm nums text-center focus:outline-none"
+                                  style={inputStyle}
                                   placeholder="kg"
                                 />
-                                <button onClick={saveEdit} className="text-green-400 p-1 ml-auto">
+                                <button onClick={saveEdit} className="p-1 ml-auto" style={{ color: ACCENT_DEEP }}>
                                   <CheckCircle2 className="w-4 h-4" />
                                 </button>
-                                <button onClick={() => setEditUid(null)} className="text-white/30 p-1">
+                                <button onClick={() => setEditUid(null)} className="p-1" style={{ color: MUTED }}>
                                   <X className="w-4 h-4" />
                                 </button>
                               </div>
                             ) : (
                               // Normal row
                               <div className="flex items-center px-3 py-2.5 gap-3">
-                                <span className="text-xs text-muted-foreground w-5 flex-shrink-0">S{i + 1}</span>
-                                <span className="text-sm text-white flex-1">
-                                  <span className="font-semibold">{s.reps}</span> reps
+                                <span className="text-xs font-800 w-5 flex-shrink-0" style={{ color: MUTED }}>S{i + 1}</span>
+                                <span className="text-sm flex-1 nums">
+                                  <span className="font-800">{s.reps}</span> reps
                                   {s.weight > 0 && (
-                                    <> × <span className="font-semibold">{s.weight} kg</span></>
+                                    <> × <span className="font-800">{s.weight} kg</span></>
                                   )}
                                 </span>
-                                <button
-                                  onClick={() => startEdit(s)}
-                                  className="p-1.5 text-white/20 hover:text-white/60 transition-colors"
-                                >
+                                <button onClick={() => startEdit(s)} className="p-1.5" style={{ color: MUTED }}>
                                   <Pencil className="w-3.5 h-3.5" />
                                 </button>
-                                <button
-                                  onClick={() => removeSet(s.uid)}
-                                  className="p-1.5 text-white/20 hover:text-red-400 transition-colors"
-                                >
+                                <button onClick={() => removeSet(s.uid)} className="p-1.5" style={{ color: ACCENT_DEEP }}>
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
@@ -992,7 +1024,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
             {/* ── SWIM / RUN / CULT ── */}
             {!isStrengthUI && (
               <div className="px-4 pt-4 pb-3 space-y-3">
-                <p className="text-xs text-muted-foreground uppercase tracking-widest">Session Details</p>
+                <p className="text-[10px] font-800 uppercase tracking-[0.1em]">Session Details</p>
                 <div className="grid grid-cols-3 gap-2">
                   {([
                     ...(type === 'swimming' || type === 'run'
@@ -1002,23 +1034,24 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                     { label: 'App kcal',      placeholder: '400',  value: calories,  step: '1',    set: setCalories },
                   ] as const).map(f => (
                     <div key={f.label}>
-                      <label className="text-xs text-muted-foreground block mb-1">{f.label}</label>
+                      <label className="text-[10px] font-800 uppercase tracking-[0.08em] block mb-1" style={{ color: MUTED }}>{f.label}</label>
                       <input
                         type="number"
                         step={f.step}
                         placeholder={f.placeholder}
                         value={f.value}
                         onChange={e => f.set(e.target.value)}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 text-center"
+                        className="w-full px-2 py-2.5 text-sm nums focus:outline-none text-center"
+                        style={inputStyle}
                       />
                     </div>
                   ))}
                 </div>
-                <div className="rounded-xl bg-orange-400/10 border border-orange-400/20 p-3">
+                <div className="p-3" style={{ border: `2px solid ${ACCENT}`, background: ACCENT_TINT }}>
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-xs font-semibold text-orange-200">Burn estimate</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                      <p className="text-[10px] font-800 uppercase tracking-[0.1em]" style={{ color: ACCENT_DEEP }}>Burn estimate</p>
+                      <p className="text-[11px] mt-0.5">
                         {machineCalories != null
                           ? 'Using entered app kcal.'
                           : cardioEstimate
@@ -1026,7 +1059,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                             : 'Enter duration and body weight to estimate.'}
                       </p>
                     </div>
-                    <p className="text-lg font-bold text-white nums">
+                    <p className="text-lg font-800 nums flex-none">
                       {cardioCalories != null ? `${cardioCalories} kcal` : '-- kcal'}
                     </p>
                   </div>
@@ -1035,37 +1068,40 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
             )}
 
             {/* Duration + Notes */}
-            <div className="px-4 pt-3 pb-5 mt-1 border-t border-white/5 space-y-3">
+            <div className="px-4 pt-3 pb-5 mt-1 space-y-3" style={{ borderTop: `2px solid ${INK}` }}>
               <div>
-                <label className="text-xs text-muted-foreground block mb-1">Duration (min)</label>
+                <label className="text-[10px] font-800 uppercase tracking-[0.08em] block mb-1" style={{ color: MUTED }}>Duration (min)</label>
                 <input
                   type="number"
                   inputMode="numeric"
                   placeholder="Fill when done — e.g. 60"
                   value={duration}
                   onChange={e => setDuration(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50"
+                  className="w-full px-3 py-2 text-sm nums focus:outline-none"
+                  style={inputStyle}
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground block mb-1">Notes (optional)</label>
+                <label className="text-[10px] font-800 uppercase tracking-[0.08em] block mb-1" style={{ color: MUTED }}>Notes (optional)</label>
                 <textarea
                   placeholder="How did it feel?"
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
                   rows={2}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 resize-none"
+                  className="w-full px-3 py-2 text-sm focus:outline-none resize-none"
+                  style={inputStyle}
                 />
               </div>
             </div>
           </div>
 
           {/* Footer */}
-          <div className="flex-shrink-0 px-4 pb-8 pt-3 border-t border-white/5">
+          <div className="flex-shrink-0 px-4 pb-8 pt-3" style={{ borderTop: `2px solid ${INK}` }}>
             <button
               onClick={handleFinish}
               disabled={saving}
-              className="w-full h-12 bg-primary rounded-xl text-primary-foreground font-semibold text-sm disabled:opacity-50 transition-opacity"
+              className="w-full h-12 text-sm font-800 disabled:opacity-50 transition-opacity"
+              style={{ border: `2px solid ${INK}`, background: INK, color: GROUND }}
             >
               {saving
                 ? 'Saving…'

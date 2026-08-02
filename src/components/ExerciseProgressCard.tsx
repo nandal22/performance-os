@@ -1,5 +1,11 @@
 import { format } from 'date-fns';
 
+const INK = '#201e1d';
+const PANEL = '#eae9e9';
+const MUTED = 'rgba(32,30,29,0.55)';
+const RULE = 'rgba(32,30,29,0.15)';
+const ACCENT_DEEP = '#ae1800';
+
 interface SetRecord {
   reps: number;
   weight: number;
@@ -32,25 +38,25 @@ export default function ExerciseProgressCard({ sessions }: Props) {
     .reduce<SetRecord | null>((best, s) => (s && (!best || s.weight > best.weight) ? s : best), null);
 
   return (
-    <div className="bg-white/3 border border-white/8 rounded-xl px-3 py-2 space-y-2">
+    <div className="px-3 py-2 space-y-2" style={{ border: `2px solid ${INK}`, background: PANEL, color: INK }}>
       <div>
-        <p className="text-[10px] text-muted-foreground mb-1">
+        <p className="text-[10px] font-800 uppercase tracking-[0.08em] mb-1" style={{ color: MUTED }}>
           Last time · {format(new Date(last.date + 'T12:00:00'), 'MMM d')}
         </p>
         <div className="flex flex-wrap gap-x-3 gap-y-0.5">
           {last.sets.map((s, i) => (
-            <span key={i} className="text-xs text-white/70">
+            <span key={i} className="text-xs font-600 nums">
               S{i + 1}: {s.reps}×{s.weight > 0 ? `${s.weight}kg` : 'BW'}
             </span>
           ))}
         </div>
       </div>
       {bestOfRecent && (
-        <div className="pt-1.5 border-t border-white/5">
-          <p className="text-[10px] text-muted-foreground mb-0.5">
+        <div className="pt-1.5" style={{ borderTop: `2px solid ${RULE}` }}>
+          <p className="text-[10px] font-800 uppercase tracking-[0.08em] mb-0.5" style={{ color: MUTED }}>
             Best of last {sessions.length} session{sessions.length !== 1 ? 's' : ''}
           </p>
-          <span className="text-xs font-semibold text-primary">
+          <span className="text-xs font-800 nums" style={{ color: ACCENT_DEEP }}>
             {bestOfRecent.reps}×{bestOfRecent.weight > 0 ? `${bestOfRecent.weight}kg` : 'BW'}
           </span>
         </div>
