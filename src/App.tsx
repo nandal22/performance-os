@@ -17,8 +17,11 @@ const WeightPage    = lazy(() => import('@/pages/WeightPage'));
 
 function LoadingScreen() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+    <div className="min-h-screen flex items-center justify-center" style={{ background: '#f3f2f2' }}>
+      <div
+        className="w-10 h-10 animate-spin"
+        style={{ border: '4px solid #201e1d', borderTopColor: 'transparent' }}
+      />
     </div>
   );
 }

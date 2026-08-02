@@ -48,6 +48,15 @@ interface GuidedMetrics {
   };
 }
 
+const INK = '#201e1d';
+const GROUND = '#f3f2f2';
+const PANEL = '#eae9e9';
+const ACCENT = '#ec3013';
+const ACCENT_TINT = '#ffe0d9';
+const ACCENT_DEEP = '#ae1800';
+const MUTED = 'rgba(32,30,29,0.55)';
+const RULE = 'rgba(32,30,29,0.15)';
+
 const typeIcon: Record<string, string> = {
   gym: '💪', cult_session: '🔥', swimming: '🏊', run: '🏃',
 };
@@ -126,30 +135,33 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
 
   return (
     <div className="fixed inset-0 z-50 flex items-end">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
-      <div className="relative w-full max-h-[88vh] bg-[#111111] rounded-t-3xl flex flex-col overflow-hidden max-w-lg mx-auto">
+      <div
+        className="relative w-full max-h-[88vh] flex flex-col overflow-hidden max-w-lg mx-auto"
+        style={{ background: GROUND, color: INK, border: `2px solid ${INK}`, boxShadow: '0 12px 32px rgba(45,43,43,0.25)' }}
+      >
         {/* Handle */}
         <div className="flex-shrink-0 flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 bg-white/20 rounded-full" />
+          <div className="w-10 h-1" style={{ background: INK }} />
         </div>
 
         {/* Header */}
-        <div className="flex-shrink-0 flex items-center justify-between px-4 pt-2 pb-3 border-b border-white/5">
+        <div className="flex-shrink-0 flex items-center justify-between px-4 pt-2 pb-3" style={{ borderBottom: `2px solid ${INK}` }}>
           <div className="flex items-center gap-2.5">
-            {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
+            {loading && <p className="text-sm" style={{ color: MUTED }}>Loading…</p>}
             {activity && (
               <>
                 <span className="text-xl">{typeIcon[activity.type] ?? '⚡'}</span>
                 <div>
-                  <h2 className="text-base font-semibold text-white capitalize">
+                  <h2 className="text-base font-800 leading-tight tracking-tight capitalize">
                     {activity.type === 'cult_session'
                       ? `Cult Session${activity.sub_type ? ` · ${SUB_TYPE_LABELS[activity.sub_type] ?? activity.sub_type}` : ''}`
                       : activity.type === 'gym' ? 'Gym'
                       : activity.type === 'swimming' ? 'Swimming'
                       : 'Run'}
                   </h2>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[11px]" style={{ color: MUTED }}>
                     {format(new Date(activity.date + 'T12:00:00'), 'EEEE, MMM d, yyyy')}
                     {activity.duration ? ` · ${activity.duration} min` : ''}
                   </p>
@@ -157,10 +169,7 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
               </>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-white transition-colors"
-          >
+          <button onClick={onClose} className="p-1.5" style={{ color: MUTED }}>
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -172,33 +181,33 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
               {/* Stats summary */}
               {sets.length > 0 && (
                 <div className="grid grid-cols-3 gap-2">
-                  <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-center">
-                    <p className="text-xl font-bold text-white">{sets.length}</p>
-                    <p className="text-xs text-muted-foreground">Sets</p>
+                  <div className="p-3 text-center" style={{ border: `2px solid ${INK}` }}>
+                    <p className="text-xl font-800 nums">{sets.length}</p>
+                    <p className="text-[11px]" style={{ color: MUTED }}>Sets</p>
                   </div>
-                  <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-center">
-                    <p className="text-xl font-bold text-white">{Math.round(totalVolume).toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground">kg total vol.</p>
+                  <div className="p-3 text-center" style={{ border: `2px solid ${INK}` }}>
+                    <p className="text-xl font-800 nums">{Math.round(totalVolume).toLocaleString()}</p>
+                    <p className="text-[11px]" style={{ color: MUTED }}>kg total vol.</p>
                   </div>
-                  <div className="rounded-xl bg-orange-400/10 border border-orange-400/20 p-3 text-center">
-                    <p className="text-xl font-bold text-white">{Math.round(calorieEstimate?.calories ?? 0)}</p>
-                    <p className="text-xs text-muted-foreground">kcal est.</p>
+                  <div className="p-3 text-center" style={{ border: `2px solid ${ACCENT}`, background: ACCENT_TINT }}>
+                    <p className="text-xl font-800 nums">{Math.round(calorieEstimate?.calories ?? 0)}</p>
+                    <p className="text-[11px]" style={{ color: ACCENT_DEEP }}>kcal est.</p>
                   </div>
                 </div>
               )}
 
               {/* Cardio metrics */}
               {activity.cardio_metrics && (
-                <div className="rounded-xl bg-white/5 border border-white/10 p-4">
+                <div className="p-4" style={{ border: `2px solid ${INK}` }}>
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div>
-                      <p className="text-xs uppercase tracking-widest text-muted-foreground">Cardio</p>
-                      <p className="text-sm font-semibold text-white mt-1">{cardioMethodLabel}</p>
+                      <p className="text-[10px] font-800 uppercase tracking-[0.1em]" style={{ color: MUTED }}>Cardio</p>
+                      <p className="text-sm font-800 mt-1">{cardioMethodLabel}</p>
                     </div>
                     {cardioCalories != null && (
                       <div className="text-right">
-                        <p className="text-lg font-bold text-white">{cardioCalories}</p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-lg font-800 nums">{cardioCalories}</p>
+                        <p className="text-[11px]" style={{ color: MUTED }}>
                           {cardioCalorieSource === 'estimated' ? 'kcal est.' : 'machine kcal'}
                         </p>
                       </div>
@@ -207,20 +216,20 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
                   <div className="grid grid-cols-3 gap-3 text-center">
                     {activity.cardio_metrics.distance != null && (
                       <div>
-                        <p className="text-lg font-bold text-white">{activity.cardio_metrics.distance}</p>
-                        <p className="text-xs text-muted-foreground">km</p>
+                        <p className="text-lg font-800 nums">{activity.cardio_metrics.distance}</p>
+                        <p className="text-[11px]" style={{ color: MUTED }}>km</p>
                       </div>
                     )}
                     {activity.cardio_metrics.avg_heart_rate != null && (
                       <div>
-                        <p className="text-lg font-bold text-white">{activity.cardio_metrics.avg_heart_rate}</p>
-                        <p className="text-xs text-muted-foreground">avg BPM</p>
+                        <p className="text-lg font-800 nums">{activity.cardio_metrics.avg_heart_rate}</p>
+                        <p className="text-[11px]" style={{ color: MUTED }}>avg BPM</p>
                       </div>
                     )}
                     {activity.cardio_metrics.calories != null && cardioCalories == null && (
                       <div>
-                        <p className="text-lg font-bold text-white">{activity.cardio_metrics.calories}</p>
-                        <p className="text-xs text-muted-foreground">kcal</p>
+                        <p className="text-lg font-800 nums">{activity.cardio_metrics.calories}</p>
+                        <p className="text-[11px]" style={{ color: MUTED }}>kcal</p>
                       </div>
                     )}
                   </div>
@@ -229,17 +238,17 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
 
               {/* Guided plan metadata */}
               {guided && (
-                <div className="rounded-xl bg-primary/[0.06] border border-primary/20 p-4">
+                <div className="p-4" style={{ border: `2px solid ${INK}`, background: PANEL }}>
                   <div className="flex items-start gap-3 mb-3">
-                    <div className="w-9 h-9 rounded-2xl bg-primary/10 border border-primary/25 flex items-center justify-center flex-shrink-0">
-                      <CalendarCheck className="w-4 h-4 text-primary" />
+                    <div className="w-9 h-9 flex items-center justify-center flex-shrink-0" style={{ border: `2px solid ${INK}` }}>
+                      <CalendarCheck className="w-4 h-4" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-white">
+                      <p className="text-sm font-800">
                         Day {guided.plan?.day ?? '-'} · {guided.plan?.title ?? 'Guided workout'}
                       </p>
                       {guided.plan?.focus && (
-                        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{guided.plan.focus}</p>
+                        <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: MUTED }}>{guided.plan.focus}</p>
                       )}
                     </div>
                   </div>
@@ -249,10 +258,10 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
                       { label: 'Sets', value: guided.completed?.strengthSets?.length ?? sets.length },
                       { label: 'Stretch', value: guided.completed?.stretch?.length ?? 0 },
                     ].map(item => (
-                      <div key={item.label} className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-2 text-center">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
-                        <p className="text-base font-bold text-white nums">{item.value}</p>
-                        <p className="text-[10px] text-muted-foreground">{item.label}</p>
+                      <div key={item.label} className="p-2 text-center" style={{ border: `2px solid ${INK}`, background: GROUND }}>
+                        <CheckCircle2 className="w-4 h-4 mx-auto mb-1" />
+                        <p className="text-base font-800 nums">{item.value}</p>
+                        <p className="text-[10px]" style={{ color: MUTED }}>{item.label}</p>
                       </div>
                     ))}
                   </div>
@@ -261,30 +270,31 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
 
               {/* Strength sets by exercise */}
               {exerciseOrder.map(exId => (
-                <div key={exId} className="rounded-xl border border-white/8 overflow-hidden">
-                  <p className="px-3 py-2 text-xs font-semibold text-white/70 bg-white/5 border-b border-white/8">
+                <div key={exId} className="overflow-hidden" style={{ border: `2px solid ${INK}` }}>
+                  <p className="px-3 py-2 text-xs font-800" style={{ background: INK, color: GROUND }}>
                     {grouped[exId].name}
                   </p>
                   {grouped[exId].sets.map((s, i) => (
                     <div
                       key={s.id}
-                      className="flex items-center px-3 py-2.5 gap-3 border-b border-white/5 last:border-0"
+                      className="flex items-center px-3 py-2.5 gap-3"
+                      style={{ borderTop: i === 0 ? undefined : `2px solid ${RULE}`, background: PANEL }}
                     >
-                      <span className="text-xs text-muted-foreground w-5 flex-shrink-0">S{i + 1}</span>
-                      <span className="text-sm text-white flex-1">
-                        <span className="font-semibold">{s.reps}</span> reps
+                      <span className="text-xs font-800 w-5 flex-shrink-0" style={{ color: MUTED }}>S{i + 1}</span>
+                      <span className="text-sm flex-1 nums">
+                        <span className="font-800">{s.reps}</span> reps
                         {s.weight != null && s.weight > 0 && (
-                          <> × <span className="font-semibold">{s.weight} kg</span></>
+                          <> × <span className="font-800">{s.weight} kg</span></>
                         )}
                       </span>
                       {getLoadLabel(s.set_number) && (
-                        <span className="text-[10px] text-muted-foreground max-w-[92px] text-right">{getLoadLabel(s.set_number)}</span>
+                        <span className="text-[10px] max-w-[92px] text-right" style={{ color: MUTED }}>{getLoadLabel(s.set_number)}</span>
                       )}
                       {s.rpe != null && (
-                        <span className="text-xs text-muted-foreground">RPE {s.rpe}</span>
+                        <span className="text-xs nums" style={{ color: MUTED }}>RPE {s.rpe}</span>
                       )}
                       {s.volume > 0 && (
-                        <span className="text-xs text-muted-foreground">{Math.round(s.volume)}kg</span>
+                        <span className="text-xs nums" style={{ color: MUTED }}>{Math.round(s.volume)}kg</span>
                       )}
                     </div>
                   ))}
@@ -293,9 +303,9 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
 
               {/* Notes */}
               {activity.notes && (
-                <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-                  <p className="text-xs text-muted-foreground mb-1">Notes</p>
-                  <p className="text-sm text-white">{activity.notes}</p>
+                <div className="p-3" style={{ border: `2px solid ${INK}`, background: PANEL }}>
+                  <p className="text-[10px] font-800 uppercase tracking-[0.1em] mb-1" style={{ color: MUTED }}>Notes</p>
+                  <p className="text-sm">{activity.notes}</p>
                 </div>
               )}
 
@@ -304,11 +314,12 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
                 <button
                   onClick={handleDelete}
                   disabled={deleting}
-                  className={`w-full py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${
+                  className="w-full py-2.5 text-sm font-800 disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={
                     confirmDelete
-                      ? 'bg-red-500/20 border border-red-500/40 text-red-400'
-                      : 'bg-white/5 border border-white/10 text-muted-foreground hover:text-red-400 hover:border-red-400/30'
-                  }`}
+                      ? { border: `2px solid ${ACCENT}`, background: ACCENT, color: GROUND }
+                      : { border: `2px solid ${INK}`, color: INK }
+                  }
                 >
                   <Trash2 className="w-4 h-4" />
                   {deleting ? 'Deleting…' : confirmDelete ? 'Tap again to confirm delete' : 'Delete Workout'}
@@ -316,7 +327,8 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
                 {confirmDelete && (
                   <button
                     onClick={() => setConfirmDelete(false)}
-                    className="w-full py-2 text-xs text-muted-foreground hover:text-white text-center"
+                    className="w-full py-2 text-xs font-800 text-center"
+                    style={{ color: MUTED }}
                   >
                     Cancel
                   </button>

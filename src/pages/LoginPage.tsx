@@ -1,6 +1,13 @@
 import { signInWithGoogle } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
+const MODERNIST = {
+  ground: '#f3f2f2',
+  ink: '#201e1d',
+  accentDeep: '#ae1800',
+  muted: 'rgba(32,30,29,0.55)',
+};
+
 export default function LoginPage() {
   const handleLogin = async () => {
     try {
@@ -11,14 +18,20 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background px-6">
+    <div
+      className="min-h-screen flex flex-col items-center justify-center px-6"
+      style={{ background: MODERNIST.ground, color: MODERNIST.ink }}
+    >
       <div className="w-full max-w-sm text-center space-y-8">
         <div className="space-y-2">
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
-            <span className="text-3xl">PO</span>
+          <div
+            className="w-16 h-16 flex items-center justify-center mx-auto"
+            style={{ border: `2px solid ${MODERNIST.ink}` }}
+          >
+            <span className="text-3xl font-800">PO</span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Performance OS</h1>
-          <p className="text-sm text-muted-foreground">Your personal fitness intelligence system</p>
+          <h1 className="text-2xl font-800 leading-tight tracking-tight">Performance OS</h1>
+          <p className="text-sm" style={{ color: MODERNIST.muted }}>Your personal fitness intelligence system</p>
         </div>
 
         <div className="text-left space-y-3 py-4">
@@ -28,8 +41,13 @@ export default function LoginPage() {
             ['Trend', 'Last time and best of last 3 sessions'],
             ['Weight', 'Quick log, powers calorie estimates'],
           ].map(([icon, label]) => (
-            <div key={label} className="flex items-center gap-3 text-sm text-muted-foreground">
-              <span className="w-12 text-xs font-semibold text-primary uppercase">{icon}</span>
+            <div key={label} className="flex items-center gap-3 text-sm" style={{ color: MODERNIST.muted }}>
+              <span
+                className="w-12 flex-none text-[10px] font-800 uppercase tracking-[0.08em]"
+                style={{ color: MODERNIST.accentDeep }}
+              >
+                {icon}
+              </span>
               <span>{label}</span>
             </div>
           ))}
@@ -37,7 +55,8 @@ export default function LoginPage() {
 
         <button
           onClick={handleLogin}
-          className="w-full h-12 rounded-xl bg-white text-gray-900 font-semibold text-sm flex items-center justify-center gap-3 hover:bg-gray-100 transition-colors"
+          className="w-full h-12 text-sm font-800 flex items-center justify-center gap-3"
+          style={{ border: `2px solid ${MODERNIST.ink}`, background: MODERNIST.ink, color: MODERNIST.ground }}
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -48,7 +67,7 @@ export default function LoginPage() {
           Continue with Google
         </button>
 
-        <p className="text-xs text-muted-foreground">Personal use only · Data stored securely in Supabase</p>
+        <p className="text-xs" style={{ color: MODERNIST.muted }}>Personal use only · Data stored securely in Supabase</p>
       </div>
     </div>
   );
