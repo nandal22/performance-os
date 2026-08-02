@@ -12,6 +12,13 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.svg" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+
+    <!-- The first thing the app does on boot is ask Supabase for the session,
+         so warm the DNS + TCP + TLS handshake to that origin in parallel with
+         loading the bundle rather than paying for it serially afterwards. -->
+    <link rel="preconnect" href="https://gobicwnqqadquxpbdbae.supabase.co" crossorigin />
+    <link rel="dns-prefetch" href="https://gobicwnqqadquxpbdbae.supabase.co" />
+
     <title>Performance OS</title>
   </head>
   <body>

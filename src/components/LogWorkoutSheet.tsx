@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { X, CheckCircle2, Trash2, ChevronDown, Plus, Pencil, Star, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -10,7 +10,8 @@ import { cardioMetricsService } from '@/services/cardioMetrics';
 import { bodyMetricsService } from '@/services/bodyMetrics';
 import { toISODate } from '@/lib/utils';
 import { calcCardioCalories, calcStrengthCalories } from '@/engines/calorieEngine';
-import ExerciseProgressSheet from './ExerciseProgressSheet';
+// Lazy: this sheet owns the recharts dependency (~400 KB raw).
+const ExerciseProgressSheet = lazy(() => import('./ExerciseProgressSheet'));
 import ExerciseProgressCard from './ExerciseProgressCard';
 
 const DRAFT_KEY = 'perf-os-draft';
@@ -1111,9 +1112,15 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
         </div>
       </div>
 
-      {/* Exercise progress sheet (z-[60] so it layers above the workout sheet) */}
+      {/* Exercise progress sheet (z-[60] so it layers above the workout sheet).
+          Mounted only while open: it pulls in recharts, and rendering it
+          unconditionally kept that in the main bundle even though the sheet is
+          opened on demand. It already returns null without an exercise and has
+          no close animation, so gating the mount changes nothing visually. */}
+      {showProgress && (
+      <Suspense fallback={null}>
       <ExerciseProgressSheet
-        exercise={showProgress ? currentEx : null}
+        exercise={currentEx}
         onClose={() => setShowProgress(false)}
         onTrackToggle={(id, tracked) => {
           setTrackedIds(prev => {
@@ -1127,6 +1134,8 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
           });
         }}
       />
+      </Suspense>
+      )}
     </>
   );
 }
