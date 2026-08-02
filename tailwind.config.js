@@ -5,7 +5,14 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['Archivo', 'system-ui', 'sans-serif'],
+      },
+      // Without this scale every `font-800` in the app (141 of them) resolved
+      // to nothing, so the Modernist restyle rendered at normal weight.
+      fontWeight: {
+        400: '400',
+        600: '600',
+        800: '800',
       },
       colors: {
         // CSS variable mappings (shadcn/ui convention)
