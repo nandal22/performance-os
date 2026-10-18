@@ -48,6 +48,11 @@ function assert(condition, message) {
 }
 
 const preamble = `
+-- Roles first: the grants below need them on a fresh cluster.
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon NOLOGIN; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
+END $$;
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS auth.uid_override (id uuid);
@@ -56,10 +61,6 @@ CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = auth, public
 AS $$ SELECT id FROM auth.uid_override LIMIT 1 $$;
 GRANT USAGE ON SCHEMA auth TO anon, authenticated;
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon NOLOGIN; END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
-END $$;
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 `;
 
