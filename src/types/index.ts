@@ -4,7 +4,7 @@
 
 // ---- Enums ----
 
-export type WorkoutCategory = 'gym' | 'cult_session' | 'swimming' | 'run';
+export type WorkoutCategory = 'gym' | 'cult_session' | 'swimming' | 'run' | 'other';
 export type WorkoutSubType = 'burn' | 'strength' | 'hrx';
 
 export type CardioMethod = 'running' | 'swimming' | 'cult_burn' | 'cult_hrx';
@@ -71,6 +71,28 @@ export interface CardioMetrics {
   created_at: string;
 }
 
+export interface CardioEntry {
+  id: string;
+  activity_id: string;
+  exercise_id?: string | null;
+  position: number;
+  duration_minutes?: number | null;
+  calories?: number | null;
+  label?: string | null;
+  created_at: string;
+}
+
+export interface ActivityListItem {
+  id: string;
+  date: string;
+  type: WorkoutCategory;
+  sub_type?: WorkoutSubType | null;
+  duration?: number | null;
+  tags: string[] | null;
+  notes?: string | null;
+  calories?: number | null;
+}
+
 export interface BodyMetric {
   id: string;
   user_id: string;
@@ -92,6 +114,7 @@ export interface StrengthSetWithExercise extends StrengthSet {
 export interface ActivityWithSets extends Activity {
   strength_sets?: StrengthSetWithExercise[];
   cardio_metrics?: CardioMetrics;
+  cardio_entries?: CardioEntry[];
 }
 
 // ---- Analytics Types (used by Phase 2 analytics engine) ----

@@ -1,4 +1,7 @@
-const APP_CACHE = 'performance-os-app-v4';
+const APP_CACHE = 'performance-os-app-v5';
+const DATA_CACHE = 'performance-os-data-v5';
+const NETWORK_TIMEOUT_MS = 2500;
+const SUPABASE_HOST = 'gobicwnqqadquxpbdbae.supabase.co';
 const MEDIA_CACHE = 'performance-os-media-v4';
 const MEDIA_METADATA_CACHE = 'performance-os-media-meta-v4';
 const WORKOUT_MEDIA_HOST = 'raw.githubusercontent.com';
@@ -107,14 +110,29 @@ async function cacheFirst(request, cacheName) {
   return response;
 }
 
-async function networkFirstNavigation(request) {
-  const cache = await caches.open(APP_CACHE);
+function fetchWithTimeout(request, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(request, { signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
+async function networkFirstWithTimeout(request, cacheName, timeoutMs, fallbackRequest) {
+  const cache = await caches.open(cacheName);
   try {
-    const response = await fetch(request);
-    if (canCache(response)) cache.put('/index.html', response.clone());
+    const response = await fetchWithTimeout(request, timeoutMs);
+    if (canCache(response)) {
+      const cacheKey = request.mode === 'navigate' ? '/index.html' : request;
+      cache.put(cacheKey, response.clone());
+    }
     return response;
   } catch {
-    return (await cache.match('/index.html')) ?? Response.error();
+    const cached = await cache.match(request);
+    if (cached) return cached;
+    if (fallbackRequest) {
+      const fallback = await cache.match(fallbackRequest);
+      if (fallback) return fallback;
+    }
+    return Response.error();
   }
 }
 
@@ -185,7 +203,7 @@ self.addEventListener('activate', event => {
     caches.keys()
       .then(keys => Promise.all(
         keys
-          .filter(key => ![APP_CACHE, MEDIA_CACHE, MEDIA_METADATA_CACHE].includes(key))
+          .filter(key => ![APP_CACHE, DATA_CACHE, MEDIA_CACHE, MEDIA_METADATA_CACHE].includes(key))
           .map(key => caches.delete(key)),
       ))
       .then(() => self.clients.claim()),
@@ -215,12 +233,17 @@ self.addEventListener('fetch', event => {
   const url = new URL(request.url);
 
   if (request.mode === 'navigate') {
-    event.respondWith(networkFirstNavigation(request));
+    event.respondWith(networkFirstWithTimeout(request, APP_CACHE, NETWORK_TIMEOUT_MS, '/index.html'));
     return;
   }
 
   if (url.origin === self.location.origin) {
     event.respondWith(cacheFirst(request, APP_CACHE));
+    return;
+  }
+
+  if (url.hostname === SUPABASE_HOST && !url.pathname.includes('/auth/')) {
+    event.respondWith(networkFirstWithTimeout(request, DATA_CACHE, NETWORK_TIMEOUT_MS));
     return;
   }
 

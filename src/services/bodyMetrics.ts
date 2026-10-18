@@ -1,16 +1,20 @@
 import { supabase } from '@/db/supabase';
+import { invalidateQueries, readQuery } from '@/lib/queryCache';
 import type { BodyMetric, CreateBodyMetric } from '@/types';
 
+const BODY_COLUMNS = 'id, user_id, date, weight, height, age, gender, notes, created_at';
+
 export const bodyMetricsService = {
-  // Get all body metric entries, newest first
   getAll: async (limit = 90): Promise<BodyMetric[]> => {
-    const { data, error } = await supabase
-      .from('body_metrics')
-      .select('*')
-      .order('date', { ascending: false })
-      .limit(limit);
-    if (error) throw error;
-    return data as BodyMetric[];
+    return readQuery(`body:${limit}`, 60_000, async () => {
+      const { data, error } = await supabase
+        .from('body_metrics')
+        .select(BODY_COLUMNS)
+        .order('date', { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return data as BodyMetric[];
+    });
   },
 
   // Get entry for a specific date
@@ -47,13 +51,14 @@ export const bodyMetricsService = {
       .select()
       .single();
     if (error) throw error;
+    invalidateQueries('body:');
     return data as BodyMetric;
   },
 
-  // Delete an entry
   delete: async (id: string): Promise<void> => {
     const { error } = await supabase.from('body_metrics').delete().eq('id', id);
     if (error) throw error;
+    invalidateQueries('body:');
   },
 
   // Get the single most recent entry (for dashboard / engine seed)

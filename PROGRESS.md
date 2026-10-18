@@ -5,6 +5,16 @@
 
 ---
 
+## Tests
+
+Run every committed case with:
+
+```bash
+npm test
+```
+
+That command applies `supabase/migrations` to a throwaway local Postgres database (with stubs for `auth.uid()` and the `anon` / `authenticated` roles) and then runs the Vitest cases for the Cardio exercise entry and the Others session. It does not touch the hosted Supabase project. Apply `013_cardio_entries_and_other.sql` before `014_security_definer_and_rls.sql` on the live database after review. The app still saves if `save_workout` is missing, but that fallback is not one transaction.
+
 ## Project Overview
 
 | Item | Value |

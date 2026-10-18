@@ -58,7 +58,15 @@ const MUTED = 'rgba(32,30,29,0.55)';
 const RULE = 'rgba(32,30,29,0.15)';
 
 const typeIcon: Record<string, string> = {
-  gym: '💪', cult_session: '🔥', swimming: '🏊', run: '🏃',
+  gym: '💪', cult_session: '🔥', swimming: '🏊', run: '🏃', other: '✎',
+};
+
+const TYPE_TITLE: Record<string, string> = {
+  gym: 'Gym',
+  cult_session: 'Cult Session',
+  swimming: 'Swimming',
+  run: 'Run',
+  other: 'Others',
 };
 
 const SUB_TYPE_LABELS: Record<string, string> = {
@@ -90,7 +98,11 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
 
   if (!activityId) return null;
 
+  const cardioEntries = (activity?.cardio_entries ?? [])
+    .slice()
+    .sort((a, b) => a.position - b.position);
   const sets: StrengthSetWithExercise[] = (activity?.strength_sets ?? [])
+    .filter(set => set.exercise?.category !== 'cardio' && set.exercise?.name?.toLowerCase() !== 'cardio')
     .slice()
     .sort((a, b) => a.set_number - b.set_number);
 
@@ -138,8 +150,8 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
       <div
-        className="relative w-full max-h-[88vh] flex flex-col overflow-hidden max-w-lg mx-auto"
-        style={{ background: GROUND, color: INK, border: `2px solid ${INK}`, boxShadow: '0 12px 32px rgba(45,43,43,0.25)' }}
+        className="relative w-full max-h-[100dvh] flex flex-col overflow-hidden max-w-lg mx-auto"
+        style={{ background: GROUND, color: INK, border: `2px solid ${INK}`, boxShadow: '0 12px 32px rgba(45,43,43,0.25)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
         {/* Handle */}
         <div className="flex-shrink-0 flex justify-center pt-3 pb-1">
@@ -152,14 +164,12 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
             {loading && <p className="text-sm" style={{ color: MUTED }}>Loading…</p>}
             {activity && (
               <>
-                <span className="text-xl">{typeIcon[activity.type] ?? '⚡'}</span>
+                <span className="text-xl">{typeIcon[activity.type] ?? '✎'}</span>
                 <div>
-                  <h2 className="text-base font-800 leading-tight tracking-tight capitalize">
+                  <h2 className="text-base font-800 leading-tight tracking-tight">
                     {activity.type === 'cult_session'
                       ? `Cult Session${activity.sub_type ? ` · ${SUB_TYPE_LABELS[activity.sub_type] ?? activity.sub_type}` : ''}`
-                      : activity.type === 'gym' ? 'Gym'
-                      : activity.type === 'swimming' ? 'Swimming'
-                      : 'Run'}
+                      : TYPE_TITLE[activity.type] ?? 'Session'}
                   </h2>
                   <p className="text-[11px]" style={{ color: MUTED }}>
                     {format(new Date(activity.date + 'T12:00:00'), 'EEEE, MMM d, yyyy')}
@@ -169,7 +179,7 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
               </>
             )}
           </div>
-          <button onClick={onClose} className="p-1.5" style={{ color: MUTED }}>
+          <button onClick={onClose} className="min-h-11 min-w-11 inline-flex items-center justify-center" style={{ color: MUTED }}>
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -196,8 +206,28 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
                 </div>
               )}
 
-              {/* Cardio metrics */}
-              {activity.cardio_metrics && (
+              {cardioEntries.length > 0 && (
+                <div className="space-y-2">
+                  {cardioEntries.map(entry => (
+                    <div key={entry.id} className="p-4" style={{ border: `2px solid ${INK}` }}>
+                      <p className="text-[10px] font-800 uppercase tracking-[0.1em]" style={{ color: MUTED }}>Cardio</p>
+                      <p className="text-sm font-800 mt-1">{entry.label || 'Cardio'}</p>
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-lg font-800 nums">{entry.duration_minutes ?? '—'}</p>
+                          <p className="text-[11px]" style={{ color: MUTED }}>min</p>
+                        </div>
+                        <div>
+                          <p className="text-lg font-800 nums">{entry.calories ?? '—'}</p>
+                          <p className="text-[11px]" style={{ color: MUTED }}>kcal</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {activity.cardio_metrics && cardioEntries.length === 0 && (
                 <div className="p-4" style={{ border: `2px solid ${INK}` }}>
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div>
@@ -305,7 +335,7 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
               {activity.notes && (
                 <div className="p-3" style={{ border: `2px solid ${INK}`, background: PANEL }}>
                   <p className="text-[10px] font-800 uppercase tracking-[0.1em] mb-1" style={{ color: MUTED }}>Notes</p>
-                  <p className="text-sm">{activity.notes}</p>
+                  <p className="text-sm whitespace-pre-wrap">{activity.notes}</p>
                 </div>
               )}
 

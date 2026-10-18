@@ -14,6 +14,7 @@ import { dataRepairsService } from '@/services/dataRepairs';
 // they're not the landing page, so there's no reason to pay for them upfront.
 const ProgressPage = lazy(() => import('@/pages/ProgressPage'));
 const WeightPage    = lazy(() => import('@/pages/WeightPage'));
+const ShotPage = import.meta.env.DEV ? lazy(() => import('@/pages/ShotPage')) : null;
 
 function LoadingScreen() {
   return (
@@ -62,6 +63,9 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        {ShotPage && (
+          <Route path="/__shot" element={<Suspense fallback={<LoadingScreen />}><ShotPage /></Suspense>} />
+        )}
         <Route element={<ProtectedLayout />}>
           <Route path="/"          element={<DashboardPage />} />
           <Route path="/progress" element={<Suspense fallback={<LoadingScreen />}><ProgressPage /></Suspense>} />

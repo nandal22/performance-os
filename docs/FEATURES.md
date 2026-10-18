@@ -32,6 +32,8 @@ Legacy `/history` and `/goals` routes redirect to Home. Body metrics remain avai
 
 ## Workout Logging
 
+Session types are Gym, Cult, Swim, Run, and Others. Others stores a free-text paragraph in `activities.notes`.
+
 Strength logging supports:
 
 - Custom exercise search and inline exercise creation.
@@ -39,11 +41,16 @@ Strength logging supports:
 - Last-session hints and draft recovery.
 - Estimated calories burned from latest body weight, duration, reps, and effective load.
 
-Cardio logging supports:
+Cardio inside a gym workout:
 
-- Running, treadmill, stair machine, elliptical, cycling/bike, rowing, and other machine.
-- Duration, optional distance, average heart rate, and optional machine calories.
-- Estimated calories when machine calories are not provided and a body weight exists.
+- Pick the `Cardio` exercise the same way as any other exercise.
+- Enter minutes, calories, and a free-text type such as `Treadmill incline walk` or `Stair climber`.
+- A workout can contain several cardio entries. They are stored in `cardio_entries` and are left out of weight, volume, and PR totals.
+- Swim, Run, and non-strength Cult sessions still record session-level distance, heart rate, and calories. Older `cardio_metrics` rows stay readable.
+
+## Tests
+
+`npm test` runs the migration cases against a throwaway local Postgres database and the frontend cases for Cardio and Others. It does not connect to the hosted project.
 
 ## Food And Steps
 
@@ -66,7 +73,8 @@ Cardio logging supports:
 |-------|-------------|
 | `activities` | Workout sessions |
 | `strength_sets` | Individual strength sets per activity |
-| `cardio_metrics` | Cardio details per activity |
+| `cardio_metrics` | Older session-level cardio details |
+| `cardio_entries` | Cardio blocks inside a workout: minutes, calories, and type text |
 | `exercises` | System and custom exercises |
 | `body_metrics` | Daily body measurements |
 | `calorie_logs` | Daily food entries, raw notes, and macros |
