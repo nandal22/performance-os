@@ -1,15 +1,19 @@
 import { supabase } from '@/db/supabase';
+import { invalidateQueries, readQuery } from '@/lib/queryCache';
 import type { Exercise, CreateExercise } from '@/types';
 
+const EXERCISE_COLUMNS = 'id, name, category, primary_muscle, secondary_muscles, equipment, is_custom, user_id, created_at';
+
 export const exercisesService = {
-  // Get all exercises (system + user's custom)
   getAll: async (): Promise<Exercise[]> => {
-    const { data, error } = await supabase
-      .from('exercises')
-      .select('*')
-      .order('name');
-    if (error) throw error;
-    return data as Exercise[];
+    return readQuery('exercises:all', 60_000, async () => {
+      const { data, error } = await supabase
+        .from('exercises')
+        .select(EXERCISE_COLUMNS)
+        .order('name');
+      if (error) throw error;
+      return data as Exercise[];
+    });
   },
 
   // Get exercises by category
@@ -46,6 +50,7 @@ export const exercisesService = {
       .select()
       .single();
     if (error) throw error;
+    invalidateQueries('exercises:');
     return data as Exercise;
   },
 
@@ -57,6 +62,7 @@ export const exercisesService = {
       .eq('id', id)
       .eq('is_custom', true);
     if (error) throw error;
+    invalidateQueries('exercises:');
   },
 
   // Check whether any strength sets reference this exercise

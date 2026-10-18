@@ -1,5 +1,5 @@
 import { format, isToday } from 'date-fns';
-import type { Activity, WorkoutCategory } from '@/types';
+import type { ActivityListItem, WorkoutCategory } from '@/types';
 import { activitiesByDate, weekDates } from '@/lib/week';
 
 const TYPE_MARK: Record<WorkoutCategory, string> = {
@@ -7,10 +7,11 @@ const TYPE_MARK: Record<WorkoutCategory, string> = {
   cult_session: 'CULT',
   swimming: 'SWIM',
   run: 'RUN',
+  other: 'OTH',
 };
 
 interface Props {
-  activities: Activity[];
+  activities: ActivityListItem[];
   selected: string | null;
   onSelect: (dateKey: string | null) => void;
 }
@@ -35,7 +36,7 @@ export default function WeekStrip({ activities, selected, onSelect }: Props) {
           const today = isToday(d);
           let mark = '';
           if (hasSessions) {
-            mark = TYPE_MARK[dayActivities[0].type] ?? '';
+            mark = TYPE_MARK[dayActivities[0].type] ?? 'LOG';
             if (dayActivities.length > 1) mark += ` +${dayActivities.length - 1}`;
           }
           return (

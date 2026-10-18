@@ -1,5 +1,8 @@
 import { format } from 'date-fns';
-import type { Activity } from '@/types';
+
+interface Dated {
+  date: string;
+}
 
 export function todayKey(): string {
   return format(new Date(), 'yyyy-MM-dd');
@@ -18,8 +21,8 @@ export function weekDates(anchor: Date = new Date()): Date[] {
   });
 }
 
-export function activitiesByDate(activities: Activity[]): Record<string, Activity[]> {
-  const map: Record<string, Activity[]> = {};
+export function activitiesByDate<T extends Dated>(activities: T[]): Record<string, T[]> {
+  const map: Record<string, T[]> = {};
   for (const a of activities) {
     (map[a.date] ??= []).push(a);
   }
@@ -27,7 +30,7 @@ export function activitiesByDate(activities: Activity[]): Record<string, Activit
 }
 
 /** The single source of truth for "this week" — the head stat and the strip must both call this. */
-export function sessionsThisWeekCount(activities: Activity[]): number {
+export function sessionsThisWeekCount(activities: Dated[]): number {
   const dates = new Set(weekDates().map((d) => format(d, 'yyyy-MM-dd')));
   return activities.filter((a) => dates.has(a.date)).length;
 }

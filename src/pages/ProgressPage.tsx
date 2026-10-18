@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Search, Trophy, TrendingUp, ChevronRight, Dumbbell } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
-import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { exercisesService } from '@/services/exercises';
 import { strengthSetsService } from '@/services/strengthSets';
 import ExerciseProgressCard from '@/components/ExerciseProgressCard';
 import ExerciseProgressSheet from '@/components/ExerciseProgressSheet';
-import LogWorkoutSheet from '@/components/LogWorkoutSheet';
+
+const LogWorkoutSheet = lazy(() => import('@/components/LogWorkoutSheet'));
 import type { Exercise, StrengthSet } from '@/types';
 
 const MODERNIST = {
@@ -196,17 +196,24 @@ export default function ProgressPage() {
           .map(name => exercises.find(ex => normalize(ex.name) === normalize(name)))
           .filter((exercise): exercise is Exercise => Boolean(exercise));
 
-        const cards = await Promise.all(matched.map(async exercise => {
-          const rawSets = await strengthSetsService.getByExercise(exercise.id, 500).catch(() => []);
-          const liftSessions = buildSessions(rawSets);
+        const rawSets = await strengthSetsService.getByExercises(matched.map(exercise => exercise.id), 2000);
+        const setsByExercise = new Map<string, StrengthSet[]>();
+        for (const set of rawSets) {
+          const group = setsByExercise.get(set.exercise_id) ?? [];
+          group.push(set);
+          setsByExercise.set(set.exercise_id, group);
+        }
+        const cards = matched.map(exercise => {
+          const liftSets = (setsByExercise.get(exercise.id) ?? []).filter(set => (set.weight ?? 0) > 0);
+          const liftSessions = buildSessions(liftSets);
           return {
             exercise,
             sessions: liftSessions,
-            pr: bestWeightFromSessions(liftSessions) ?? bestFromSets(rawSets),
+            pr: bestWeightFromSessions(liftSessions) ?? bestFromSets(liftSets),
             last: liftSessions.length ? liftSessions[liftSessions.length - 1] : null,
             previous: liftSessions.length > 1 ? liftSessions[liftSessions.length - 2] : null,
           };
-        }));
+        });
 
         setMainCards(cards);
       } catch {
@@ -223,6 +230,7 @@ export default function ProgressPage() {
     const query = search.trim().toLowerCase();
     if (!query) return [];
     return exercises
+      .filter(ex => ex.name.toLowerCase() !== 'cardio')
       .filter(ex => ex.name.toLowerCase().includes(query))
       .sort((a, b) => a.name.localeCompare(b.name))
       .slice(0, 12);
@@ -265,18 +273,14 @@ export default function ProgressPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {mainCards.map((card, index) => {
+              {mainCards.map((card) => {
                 const data = card.sessions.slice(-8).map(session => ({ date: session.date, weight: session.maxWeight }));
                 const hasProgress = card.sessions.length > 1;
                 return (
-                  <motion.button
+                  <button
                     key={card.exercise.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.03, type: 'spring', stiffness: 380, damping: 28 }}
-                    whileTap={{ scale: 0.98 }}
                     onClick={() => setSelectedEx(card.exercise)}
-                    className="w-full p-3.5 text-left"
+                    className="w-full min-h-11 p-3.5 text-left"
                     style={{ border: `2px solid ${MODERNIST.ink}`, background: MODERNIST.panel }}
                   >
                     <div className="flex items-start gap-3">
@@ -340,14 +344,14 @@ export default function ProgressPage() {
 
                         <button
                           onClick={(e) => { e.stopPropagation(); setHistoryExercise(card.exercise); }}
-                          className="text-[11px] font-800 mt-2"
+                          className="min-h-11 text-[11px] font-800 mt-2"
                           style={{ color: MODERNIST.accentDeep }}
                         >
                           Full history →
                         </button>
                       </div>
                     </div>
-                  </motion.button>
+                  </button>
                 );
               })}
             </div>
@@ -508,11 +512,15 @@ export default function ProgressPage() {
         onClose={() => setHistoryExercise(null)}
         onLogSet={() => { setHistoryExercise(null); setLogSheetOpen(true); }}
       />
-      <LogWorkoutSheet
-        open={logSheetOpen}
-        onClose={() => setLogSheetOpen(false)}
-        onSuccess={() => setLogSheetOpen(false)}
-      />
+      {logSheetOpen && (
+        <Suspense fallback={null}>
+          <LogWorkoutSheet
+            open={logSheetOpen}
+            onClose={() => setLogSheetOpen(false)}
+            onSuccess={() => setLogSheetOpen(false)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

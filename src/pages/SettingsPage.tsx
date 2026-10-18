@@ -5,7 +5,6 @@ import type { Exercise, ExerciseCategory } from '@/types';
 import { exercisesService } from '@/services/exercises';
 import { trackerDataHealthService, type TrackerDataHealthSnapshot } from '@/services/trackerDataHealth';
 import { useTheme } from '@/hooks/useTheme';
-import { motion, AnimatePresence } from 'framer-motion';
 
 const CATEGORIES: ExerciseCategory[] = [
   'push', 'pull', 'legs', 'core', 'cardio', 'mobility', 'other',
@@ -20,11 +19,6 @@ const MODERNIST = {
   panel: '#eae9e9',
   muted: 'rgba(32,30,29,0.55)',
   rule: 'rgba(32,30,29,0.15)',
-};
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 12 },
-  show:   { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 380, damping: 28 } },
 };
 
 function formatCount(value: number | null): string {
@@ -145,8 +139,7 @@ export default function SettingsPage() {
       <main className="flex-1 px-4 py-5 space-y-4 max-w-lg mx-auto w-full pb-nav">
 
         {/* ── Appearance ── */}
-        <motion.div
-          variants={fadeUp} initial="hidden" animate="show"
+        <div
           className="p-4"
           style={{ border: `2px solid ${MODERNIST.ink}`, background: MODERNIST.panel }}
         >
@@ -168,29 +161,33 @@ export default function SettingsPage() {
             </div>
 
             {/* Animated toggle */}
-            <motion.button
+            <button
               onClick={toggle}
-              whileTap={{ scale: 0.93 }}
-              className="relative w-12 h-6"
-              style={{
-                border: `2px solid ${MODERNIST.ink}`,
-                background: theme === 'dark' ? MODERNIST.ink : MODERNIST.ground,
-              }}
+              className="min-h-11 min-w-11 inline-flex items-center justify-center"
+              aria-label="Toggle theme"
             >
-              <motion.span
-                animate={{ x: theme === 'dark' ? 22 : 0 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 32 }}
-                className="absolute top-0 w-5 h-5"
-                style={{ left: 0, background: theme === 'dark' ? MODERNIST.accent : MODERNIST.ink }}
-              />
-            </motion.button>
+              <span
+                className="relative block w-12 h-6"
+                style={{
+                  border: `2px solid ${MODERNIST.ink}`,
+                  background: theme === 'dark' ? MODERNIST.ink : MODERNIST.ground,
+                }}
+              >
+                <span
+                  className="absolute top-0 w-5 h-5 transition-transform duration-200"
+                  style={{
+                    left: 0,
+                    background: theme === 'dark' ? MODERNIST.accent : MODERNIST.ink,
+                    transform: `translateX(${theme === 'dark' ? 22 : 0}px)`,
+                  }}
+                />
+              </span>
+            </button>
           </div>
-        </motion.div>
+        </div>
 
         {/* ── Supabase health ── */}
-        <motion.div
-          variants={fadeUp} initial="hidden" animate="show"
-          transition={{ delay: 0.04 } as never}
+        <div
           className="p-4 space-y-4"
           style={{ border: `2px solid ${MODERNIST.ink}` }}
         >
@@ -208,8 +205,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <motion.button
-              whileTap={{ scale: 0.92 }}
+            <button
               onClick={loadHealth}
               disabled={healthLoading}
               aria-label="Refresh tracker data health"
@@ -217,7 +213,7 @@ export default function SettingsPage() {
               style={{ border: `2px solid ${MODERNIST.ink}` }}
             >
               <RefreshCw className={`w-4 h-4 ${healthLoading ? 'animate-spin' : ''}`} />
-            </motion.button>
+            </button>
           </div>
 
           {healthError && (
@@ -317,12 +313,10 @@ export default function SettingsPage() {
               </div>
             </>
           )}
-        </motion.div>
+        </div>
 
         {/* ── Add exercise ── */}
-        <motion.div
-          variants={fadeUp} initial="hidden" animate="show"
-          transition={{ delay: 0.05 } as never}
+        <div
           className="p-4 space-y-3"
           style={{ border: `2px solid ${MODERNIST.ink}` }}
         >
@@ -341,45 +335,38 @@ export default function SettingsPage() {
           {/* Category chips */}
           <div className="flex flex-wrap gap-1.5">
             {CATEGORIES.map(cat => (
-              <motion.button
+              <button
                 key={cat}
-                whileTap={{ scale: 0.92 }}
                 onClick={() => setNewCategory(cat)}
-                className="px-2.5 py-1 text-xs font-800 uppercase tracking-[0.06em] relative"
+                className="min-h-11 px-2.5 text-xs font-800 uppercase tracking-[0.06em] relative"
                 style={{ border: `2px solid ${MODERNIST.ink}` }}
               >
                 {newCategory === cat && (
-                  <motion.div
-                    layoutId="cat-active"
+                  <div
                     className="absolute inset-0"
                     style={{ background: MODERNIST.ink }}
-                    transition={{ type: 'spring', stiffness: 500, damping: 36 }}
                   />
                 )}
                 <span className="relative z-10" style={{ color: newCategory === cat ? MODERNIST.ground : MODERNIST.ink }}>
                   {cat}
                 </span>
-              </motion.button>
+              </button>
             ))}
           </div>
 
-          <motion.button
-            whileTap={{ scale: 0.97 }}
+          <button
             onClick={handleCreate}
             disabled={creating || !newName.trim()}
-            className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-800 disabled:opacity-35 transition-opacity"
+            className="w-full min-h-11 flex items-center justify-center gap-2 py-2.5 text-sm font-800 disabled:opacity-35 transition-opacity"
             style={{ border: `2px solid ${MODERNIST.ink}`, background: MODERNIST.accent, color: MODERNIST.ground }}
           >
             <Plus className="w-4 h-4" />
             {creating ? 'Adding…' : newName.trim() ? `Add "${newName.trim()}" · ${newCategory}` : 'Add exercise'}
-          </motion.button>
-        </motion.div>
+          </button>
+        </div>
 
         {/* ── My custom exercises ── */}
-        <motion.div
-          variants={fadeUp} initial="hidden" animate="show"
-          transition={{ delay: 0.1 } as never}
-        >
+        <div>
           <div className="flex items-center justify-between mb-3 px-0.5">
             <p className="text-[10px] font-800 uppercase tracking-[0.1em]">My Exercises</p>
             {exercises.length > 0 && (
@@ -403,16 +390,12 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              <AnimatePresence>
-                {exercises.map((ex, i) => {
+              
+                {exercises.map((ex) => {
                   const isConfirming = confirmDel === ex.id;
                   return (
-                    <motion.div
+                    <div
                       key={ex.id}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, x: -20, scale: 0.95 }}
-                      transition={{ delay: i * 0.04, type: 'spring', stiffness: 380, damping: 28 }}
                       className="px-3.5 py-3 flex items-center gap-3"
                       style={{ border: `2px solid ${MODERNIST.ink}`, background: MODERNIST.panel }}
                     >
@@ -430,11 +413,10 @@ export default function SettingsPage() {
                         </p>
                       </div>
 
-                      <motion.button
-                        whileTap={{ scale: 0.9 }}
+                      <button
                         onClick={() => handleDelete(ex.id)}
                         onBlur={() => setConfirmDel(null)}
-                        className="flex-shrink-0 px-2.5 py-1.5 text-xs font-800"
+                        className="min-h-11 min-w-11 flex-shrink-0 px-2.5 text-xs font-800 inline-flex items-center justify-center"
                         style={
                           isConfirming
                             ? { border: `2px solid ${MODERNIST.accent}`, background: MODERNIST.accent, color: MODERNIST.ground }
@@ -442,14 +424,14 @@ export default function SettingsPage() {
                         }
                       >
                         {isConfirming ? 'Delete?' : <Trash2 className="w-3.5 h-3.5" />}
-                      </motion.button>
-                    </motion.div>
+                      </button>
+                    </div>
                   );
                 })}
-              </AnimatePresence>
+              
             </div>
           )}
-        </motion.div>
+        </div>
 
       </main>
     </div>

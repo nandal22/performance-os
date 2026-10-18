@@ -7,18 +7,17 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "node scripts/test-all.mjs",
     "preview": "vite preview",
     "perf:smoke": "node --eval \"(async()=>{const base=process.env.PERF_URL||process.env.URL||'http://localhost:4173';const paths=(process.env.PERF_PATHS?process.env.PERF_PATHS.split(','):['/','/manifest.webmanifest','/sw.js']);const runs=Number(process.env.PERF_RUNS||3);const timeout=Number(process.env.PERF_TIMEOUT_MS||5000);let failed=false;for(let run=1;run<=runs;run++){await Promise.all(paths.map(async path=>{const url=new URL(path,base);const controller=new AbortController();const started=performance.now();const timer=setTimeout(()=>controller.abort(),timeout);try{const response=await fetch(url,{signal:controller.signal});const ms=Math.round(performance.now()-started);console.log((response.ok?'ok':'fail')+' run='+run+' status='+response.status+' time='+ms+'ms url='+url.href);if(!response.ok)failed=true;}catch(error){failed=true;console.error('fail run='+run+' url='+url.href+' error='+(error&&error.message?error.message:error));}finally{clearTimeout(timer);}}));}if(failed)process.exit(1);})()\""
   },
   "dependencies": {
     "@fontsource/archivo": "^5.3.0",
-    "@supabase/auth-helpers-react": "^0.15.0",
     "@supabase/supabase-js": "^2.98.0",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "framer-motion": "^12.34.3",
     "lucide-react": "^0.575.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -29,6 +28,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
     "@types/node": "^24.11.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
@@ -38,10 +39,12 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "jsdom": "^29.1.1",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.19",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.48.0",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vitest": "^5.0.5"
   }
 }

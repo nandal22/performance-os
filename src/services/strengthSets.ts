@@ -1,4 +1,5 @@
 import { supabase } from '@/db/supabase';
+import { readQuery } from '@/lib/queryCache';
 import type { StrengthSet, CreateStrengthSet, ExerciseSummary, PRRecord } from '@/types';
 
 export const strengthSetsService = {
@@ -15,14 +16,23 @@ export const strengthSetsService = {
 
   // Get all sets for a specific exercise (for trend analysis)
   getByExercise: async (exerciseId: string, limit = 100): Promise<StrengthSet[]> => {
-    const { data, error } = await supabase
-      .from('strength_sets')
-      .select('*, activity:activities(date)')
-      .eq('exercise_id', exerciseId)
-      .order('created_at', { ascending: false })
-      .limit(limit);
-    if (error) throw error;
-    return data as StrengthSet[];
+    const rows = await strengthSetsService.getByExercises([exerciseId], limit);
+    return rows;
+  },
+
+  getByExercises: async (exerciseIds: string[], limit = 500): Promise<StrengthSet[]> => {
+    if (exerciseIds.length === 0) return [];
+    const key = `sets:${[...exerciseIds].sort().join(',')}:${limit}`;
+    return readQuery(key, 60_000, async () => {
+      const { data, error } = await supabase
+        .from('strength_sets')
+        .select('id, activity_id, exercise_id, set_number, reps, weight, rpe, rest, tempo, volume, created_at, activity:activities!inner(date)')
+        .in('exercise_id', exerciseIds)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return data as StrengthSet[];
+    });
   },
 
   // Bulk insert sets for an activity
