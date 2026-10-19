@@ -1,6 +1,7 @@
 import type { ActivityWithSets, Exercise, StrengthSetWithExercise } from '@/types';
 import type { ProgressCard } from '@/services/progressCards';
 import type { PlanComparison, PlanSummary, WorkoutPlan } from '@/services/plans';
+import type { WorkoutSession } from '@/lib/workoutSession';
 
 const exercise = (id: string, name: string): Exercise => ({
   id,
@@ -112,86 +113,31 @@ export const DETAIL_PREVIEW: ActivityWithSets = {
   cardio_entries: [],
 };
 
-export const PLAN_SUMMARY: PlanSummary = {
-  id: 'plan-shot',
-  plan_date: '2026-10-19',
-  day_type: 'Pull',
-  title: 'Back and biceps',
-  notes: 'Leave a rep in the tank on the row.',
-  status: 'planned',
-  activity_id: null,
-  exercise_count: 4,
-};
+const NO_CARDIO = { target_duration_min: null, target_incline_pct: null, target_speed_kmh: null, target_kcal: null };
 
 export const PLAN_PREVIEW: WorkoutPlan = {
-  ...PLAN_SUMMARY,
+  id: 'plan-shot',
+  plan_date: '2026-10-19',
+  day_type: 'Push',
+  title: 'Chest, shoulders, and a walk',
+  notes: 'Leave a rep in the tank on the presses.',
+  status: 'planned',
+  activity_id: null,
+  exercise_count: 3,
+  planned: [],
   exercises: [
     {
       id: 'pe-row',
-      position: 1,
+      position: 2,
       exercise_id: 'row',
       exercise_name: 'Barbell Row',
       superset_group: null,
       note: null,
-      sets: [
-        {
-          id: 'ps-row-1',
-          set_number: 1,
-          set_type: 'warmup',
-          target_reps_min: 8,
-          target_reps_max: 10,
-          target_weight_kg: 40,
-          target_rir_min: 3,
-          target_rir_max: 4,
-          rest_seconds: 60,
-          note: null,
-        },
-        {
-          id: 'ps-row-2',
-          set_number: 2,
-          set_type: 'top',
-          target_reps_min: 6,
-          target_reps_max: 8,
-          target_weight_kg: 70,
-          target_rir_min: 1,
-          target_rir_max: 2,
-          rest_seconds: 150,
-          note: null,
-        },
-      ],
-    },
-    {
-      id: 'pe-curl',
-      position: 2,
-      exercise_id: 'curl',
-      exercise_name: 'Barbell Curl',
-      superset_group: null,
-      note: null,
+      is_cardio: false,
+      load_type: 'total',
+      ...NO_CARDIO,
       sets: [{
-        id: 'ps-curl-1',
-        set_number: 1,
-        set_type: 'straight',
-        target_reps_min: 10,
-        target_reps_max: 12,
-        target_weight_kg: 30,
-        target_rir_min: 2,
-        target_rir_max: 2,
-        rest_seconds: 90,
-        note: null,
-      }],
-    },
-  ],
-};
-
-export const PLAN_COMPARISON: PlanComparison = {
-  day_type: 'Pull',
-  plan_date: '2026-10-17',
-  exercises: [{
-    name: 'Barbell Row',
-    position: 1,
-    sets: [
-      {
-        id: 'cmp-1',
+        id: 'ps-row-1',
         set_number: 1,
         set_type: 'top',
         target_reps_min: 6,
@@ -199,19 +145,144 @@ export const PLAN_COMPARISON: PlanComparison = {
         target_weight_kg: 70,
         target_rir_min: 1,
         target_rir_max: 2,
-        actual: { reps: 8, weight: 70, rpe: 8 },
+        rest_seconds: 150,
+        note: null,
+      }],
+    },
+    {
+      id: 'pe-incline',
+      position: 3,
+      exercise_id: 'incline-db',
+      exercise_name: 'Incline Dumbbell Press',
+      superset_group: null,
+      note: null,
+      is_cardio: false,
+      load_type: 'per_dumbbell',
+      ...NO_CARDIO,
+      sets: [
+        {
+          id: 'ps-incline-1',
+          set_number: 1,
+          set_type: 'top',
+          target_reps_min: 6,
+          target_reps_max: 8,
+          target_weight_kg: 27.5,
+          target_rir_min: 1,
+          target_rir_max: 2,
+          rest_seconds: 120,
+          note: null,
+        },
+        {
+          id: 'ps-incline-2',
+          set_number: 2,
+          set_type: 'backoff',
+          target_reps_min: 8,
+          target_reps_max: 10,
+          target_weight_kg: 25,
+          target_rir_min: 2,
+          target_rir_max: 3,
+          rest_seconds: 90,
+          note: null,
+        },
+      ],
+    },
+    {
+      id: 'pe-walk',
+      position: 4,
+      exercise_id: 'cardio',
+      exercise_name: 'Cardio',
+      superset_group: null,
+      note: 'Treadmill incline walk',
+      is_cardio: true,
+      load_type: 'total',
+      target_duration_min: 20,
+      target_incline_pct: 10,
+      target_speed_kmh: 5.5,
+      target_kcal: 180,
+      sets: [],
+    },
+  ],
+};
+PLAN_PREVIEW.planned = PLAN_PREVIEW.exercises;
+
+export const PLAN_SUMMARY: PlanSummary = {
+  id: PLAN_PREVIEW.id,
+  plan_date: PLAN_PREVIEW.plan_date,
+  day_type: PLAN_PREVIEW.day_type,
+  title: PLAN_PREVIEW.title,
+  notes: PLAN_PREVIEW.notes,
+  status: PLAN_PREVIEW.status,
+  activity_id: null,
+  exercise_count: PLAN_PREVIEW.exercises.length,
+  planned: PLAN_PREVIEW.exercises,
+};
+
+export const RESUMED_SESSION: WorkoutSession = {
+  version: 1,
+  activityId: 'plan-shot',
+  planId: 'plan-shot',
+  type: 'gym',
+  subType: null,
+  date: '2026-10-19',
+  notes: 'Push',
+  tags: ['Push'],
+  startedAt: Date.now() - 25 * 60_000,
+  sets: [
+    { id: 'shot-set-1', exercise_id: 'row', exercise_name: 'Barbell Row', set_number: 1, reps: 8, weight: 70, rpe: 8, plan_set_id: 'ps-row-1' },
+    { id: 'shot-set-2', exercise_id: 'incline-db', exercise_name: 'Incline Dumbbell Press', set_number: 1, reps: 7, weight: 55, rpe: 8.5, plan_set_id: 'ps-incline-1', load_mode: 'dumbbell_pair' },
+  ],
+  cardio: [],
+  skipped: [],
+  extras: [],
+};
+
+export const PLAN_COMPARISON: PlanComparison = {
+  day_type: 'Push',
+  plan_date: '2026-10-17',
+  exercises: [
+    {
+      name: 'Incline Dumbbell Press',
+      position: 1,
+      load_type: 'per_dumbbell',
+      cardio: null,
+      sets: [
+        {
+          id: 'cmp-1',
+          set_number: 1,
+          set_type: 'top',
+          target_reps_min: 6,
+          target_reps_max: 8,
+          target_weight_kg: 27.5,
+          target_rir_min: 1,
+          target_rir_max: 2,
+          actual: { reps: 8, weight: 55, rpe: 8 },
+        },
+        {
+          id: 'cmp-2',
+          set_number: 2,
+          set_type: 'backoff',
+          target_reps_min: 8,
+          target_reps_max: 10,
+          target_weight_kg: 25,
+          target_rir_min: 2,
+          target_rir_max: 3,
+          actual: { reps: 8, weight: 45, rpe: 7 },
+        },
+      ],
+    },
+    {
+      name: 'Cardio',
+      position: 2,
+      load_type: 'total',
+      sets: [],
+      cardio: {
+        label: 'Treadmill incline walk',
+        target_duration_min: 20,
+        target_incline_pct: 10,
+        target_speed_kmh: 5.5,
+        target_kcal: 180,
+        actual: { minutes: 22, calories: 195, label: 'Treadmill incline walk' },
       },
-      {
-        id: 'cmp-2',
-        set_number: 2,
-        set_type: 'backoff',
-        target_reps_min: 8,
-        target_reps_max: 10,
-        target_weight_kg: 60,
-        target_rir_min: 2,
-        target_rir_max: 3,
-        actual: { reps: 8, weight: 50, rpe: 7 },
-      },
-    ],
-  }],
+    },
+  ],
 };

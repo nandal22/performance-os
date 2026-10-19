@@ -1,3 +1,4 @@
+import { estimatePlanCalories } from '@/lib/planMath';
 import type { PlanSummary } from '@/services/plans';
 
 const INK = '#201e1d';
@@ -10,12 +11,17 @@ export default function TodayPlanCard({
   plan,
   onStart,
   onBrowse,
+  bodyWeightKg = null,
 }: {
   plan: PlanSummary;
+  bodyWeightKg?: number | null;
   onStart: () => void;
   onBrowse: () => void;
 }) {
   const starting = plan.status === 'planned' || plan.status === 'in_progress';
+  const kcal = estimatePlanCalories(plan.planned, bodyWeightKg);
+  const cardio = plan.planned.filter(item => item.is_cardio).length;
+  const strength = plan.exercise_count - cardio;
   return (
     <section data-testid="today-plan" className="p-4" style={{ border: `2px solid ${INK}`, background: ACCENT_TINT }}>
       <div className="flex items-start justify-between gap-3">
@@ -26,7 +32,8 @@ export default function TodayPlanCard({
           <h2 className="text-lg font-800 leading-tight mt-1">{plan.day_type}</h2>
           {plan.title && <p className="text-sm mt-0.5">{plan.title}</p>}
           <p className="text-[11px] mt-1" style={{ color: MUTED }}>
-            {plan.exercise_count} exercise{plan.exercise_count === 1 ? '' : 's'}
+            {strength} exercise{strength === 1 ? '' : 's'}{cardio > 0 ? ` + ${cardio} cardio` : ''}
+            {kcal != null && <> · <span data-testid="plan-kcal" className="font-800 nums" style={{ color: INK }}>≈ {kcal} kcal est.</span></>}
           </p>
         </div>
         <button

@@ -295,12 +295,35 @@ try {
   const logTop = await evalIn(page, `document.querySelector('[data-testid="sheet-header"]')?.getBoundingClientRect().top ?? 0`);
   record('plan log header clears a 47px top inset', logTop >= TOP, `top ${Math.round(logTop)}px`);
 
+  const smallTargets = await evalIn(page, `JSON.stringify([...document.querySelectorAll('[role="dialog"] button, [data-testid="sheet-header"] button, section button')]
+    .filter(el => el.offsetParent !== null)
+    .map(el => ({ name: el.getAttribute('aria-label') || el.textContent.trim(), h: Math.round(el.getBoundingClientRect().height), w: Math.round(el.getBoundingClientRect().width) }))
+    .filter(el => el.h < 44 || el.w < 44))`);
+  record('plan log buttons are at least 44px', smallTargets === '[]', smallTargets);
+  await evalIn(page, `document.querySelector('[data-testid="per-db"]')?.scrollIntoView({ block: 'center' })`);
+  await delay(150);
+  const planLogDb = await shot(page, 'plan-log-per-db.png');
+  const perDb = await evalIn(page, `document.querySelector('[data-testid="per-db"]')?.textContent ?? ''`);
+  record('plan log shows the per-dumbbell weight', /kg \/ DB$/.test(perDb), perDb);
+  await evalIn(page, `document.querySelector('[data-testid="plan-cardio"]')?.scrollIntoView({ block: 'end' })`);
+  await delay(150);
+  const planLogCardio = await shot(page, 'plan-log-cardio.png');
+  const cardioLast = await evalIn(page, `(() => { const cardio = document.querySelector('[data-testid="plan-cardio"]'); const groups = cardio ? [...cardio.parentElement.querySelectorAll(':scope > section')] : []; return groups.length + ':' + (groups[groups.length - 1]?.dataset.testid ?? ''); })()`);
+  record('plan cardio item is listed last', /^[2-9]\d*:plan-cardio$/.test(cardioLast), cardioLast);
+
+  await gotoReady(page, `${BASE}/__shot?shot=plan-resumed`, '[data-testid="sheet-header"]');
+  await evalIn(page, paintStatusBar(TOP));
+  await delay(150);
+  const planResumed = await shot(page, 'plan-resumed.png');
+  const resumedText = await evalIn(page, `document.querySelector('[data-testid="sync-status"]')?.textContent ?? ''`);
+  record('a resumed plan session shows its logged sets', /2 logged/.test(resumedText), resumedText);
+
   await gotoReady(page, `${BASE}/__shot?shot=plan-actual`, '[aria-label="Planned versus actual"]');
   await evalIn(page, paintStatusBar(TOP));
   await delay(100);
   const planActual = await shot(page, 'plan-actual.png');
 
-  console.log(`      plan screenshots ${planCard} ${planLog} ${planActual}`);
+  console.log(`      plan screenshots ${planCard} ${planLog} ${planLogDb} ${planLogCardio} ${planResumed} ${planActual}`);
   console.log(`      progress first content ${progressMs}ms on throttled 4G at 390x844`);
   console.log(`      screenshots ${beforeProgress} ${afterProgressFile} ${beforeDetail} ${afterDetailFile}`);
   console.log(`      resources ${JSON.stringify(resources)}`);

@@ -10,6 +10,8 @@ import { Dumbbell, Plus, ChevronRight, Scale } from 'lucide-react';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
 import TodayPlanCard from '@/components/TodayPlanCard';
 import { plansService, type PlanSummary, type WorkoutPlan } from '@/services/plans';
+import { sessionStore, sessionsService, syncQueue } from '@/services/sessions';
+import type { WorkoutSession } from '@/lib/workoutSession';
 
 const LogWorkoutSheet = lazy(() => import('@/components/LogWorkoutSheet'));
 const PlanLogSheet = lazy(() => import('@/components/PlanLogSheet'));
@@ -26,18 +28,13 @@ const MODERNIST = {
   panel: '#eae9e9',
 };
 
-const DRAFT_KEY = 'perf-os-draft';
+const LEGACY_DRAFT_KEY = 'perf-os-draft';
 
-interface DraftMeta { loggedSets: unknown[]; savedAt: number }
-
-function readDraft(): DraftMeta | null {
+function hasLegacyDraft() {
   try {
-    const raw = localStorage.getItem(DRAFT_KEY);
-    if (!raw) return null;
-    const d: DraftMeta = JSON.parse(raw);
-    if (Date.now() - d.savedAt > 86400000) { localStorage.removeItem(DRAFT_KEY); return null; }
-    return d.loggedSets.length > 0 ? d : null;
-  } catch { return null; }
+    const draft = JSON.parse(localStorage.getItem(LEGACY_DRAFT_KEY) ?? 'null') as { loggedSets?: unknown[]; savedAt?: number } | null;
+    return Boolean(draft?.loggedSets?.length) && Date.now() - (draft?.savedAt ?? 0) < 86400000;
+  } catch { return false; }
 }
 
 const TYPE_CONFIG: Record<WorkoutCategory, { mark: string }> = {
@@ -78,13 +75,13 @@ export default function DashboardPage() {
   const [latestWeight,     setLatestWeight]     = useState<BodyMetric | null>(null);
   const [loading,          setLoading]          = useState(true);
   const [showSheet,        setShowSheet]        = useState(false);
-  const [resumingDraft,    setResumingDraft]    = useState(false);
   const [selectedId,       setSelectedId]       = useState<string | null>(null);
-  const [draft,            setDraft]            = useState<DraftMeta | null>(readDraft);
+  const [freeSession,      setFreeSession]      = useState<WorkoutSession | null>(() => sessionStore.read(null));
+  const [legacyDraft,      setLegacyDraft]      = useState(hasLegacyDraft);
   const [selectedDay,      setSelectedDay]      = useState<string | null>(null);
   const [plans,            setPlans]            = useState<PlanSummary[]>([]);
   const [featured,         setFeatured]         = useState<PlanSummary | null>(null);
-  const [planLog,          setPlanLog]          = useState<WorkoutPlan | null>(null);
+  const [planLog,          setPlanLog]          = useState<{ plan: WorkoutPlan; autoStart: boolean } | null>(null);
   const [showPlans,        setShowPlans]        = useState(false);
 
   const load = useCallback(async () => {
@@ -104,6 +101,15 @@ export default function DashboardPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Resume an unfinished workout started on another device, or one whose local copy was cleared.
+  useEffect(() => {
+    void syncQueue.flush();
+    if (sessionStore.read(null)) return;
+    void sessionsService.findFree().then(remote => {
+      if (remote && !sessionStore.read(null)) setFreeSession(sessionStore.adopt(remote));
+    });
+  }, []);
+
   const refreshPlans = useCallback(async () => {
     const today = new Date().toISOString().slice(0, 10);
     const next = await plansService.list();
@@ -115,11 +121,11 @@ export default function DashboardPage() {
 
   useEffect(() => { void refreshPlans().catch(() => undefined); }, [refreshPlans]);
 
-  const openPlan = async (plan: PlanSummary) => {
+  const openPlan = async (plan: PlanSummary, autoStart: boolean) => {
     const full = await plansService.get(plan.id);
     if (!full) return;
     setShowPlans(false);
-    setPlanLog(full);
+    setPlanLog({ plan: full, autoStart });
   };
 
   const thisWeekCount = sessionsThisWeekCount(recentActivities);
@@ -157,17 +163,19 @@ export default function DashboardPage() {
 
       <main className="flex-1 px-4 py-5 space-y-4 max-w-lg mx-auto w-full pb-nav">
 
-        {/* Active workout draft banner */}
-          {draft && (
+        {/* Unfinished workout banner */}
+          {(freeSession || legacyDraft) && (
             <button
-              onClick={() => { setResumingDraft(true); setShowSheet(true); }}
+              onClick={() => setShowSheet(true)}
               className="w-full flex items-center gap-3 p-4 text-left min-h-11"
               style={{ border: `2px solid ${MODERNIST.accent}`, background: MODERNIST.accentTint, color: MODERNIST.accentDeep }}
             >
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-800 uppercase tracking-[0.06em]">In progress · Continue workout</p>
                 <p className="text-xs mt-0.5">
-                  {draft.loggedSets.length} set{draft.loggedSets.length !== 1 ? 's' : ''} logged
+                  {freeSession
+                    ? `${freeSession.sets.length} set${freeSession.sets.length !== 1 ? 's' : ''} logged${freeSession.cardio.length ? ` · ${freeSession.cardio.length} cardio` : ''}`
+                    : 'Unsaved sets from before the update'}
                 </p>
               </div>
               <ChevronRight className="w-4 h-4 flex-shrink-0" />
@@ -177,7 +185,8 @@ export default function DashboardPage() {
         {featured && (
           <TodayPlanCard
             plan={featured}
-            onStart={() => { void openPlan(featured); }}
+            bodyWeightKg={latestWeight?.weight ?? null}
+            onStart={() => { void openPlan(featured, true); }}
             onBrowse={() => setShowPlans(true)}
           />
         )}
@@ -282,6 +291,11 @@ export default function DashboardPage() {
                       </p>
                     </div>
 
+                    {a.status === 'in_progress' && (
+                      <span className="text-[10px] font-800 uppercase px-1.5 py-1" style={{ border: `2px solid ${MODERNIST.accent}`, color: MODERNIST.accentDeep }}>
+                        Live
+                      </span>
+                    )}
                     {typeof meta.kcal === 'number' && meta.kcal > 0 && (
                       <span className="text-[11px] font-800 nums px-2 py-1" style={{ border: `2px solid ${MODERNIST.ink}` }}>
                         {Math.round(meta.kcal)} kcal
@@ -299,7 +313,7 @@ export default function DashboardPage() {
 
       {/* Floating Action Button */}
       <button
-        onClick={() => { setResumingDraft(false); setShowSheet(true); }}
+        onClick={() => setShowSheet(true)}
         style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))', background: MODERNIST.accent, border: `2px solid ${MODERNIST.ink}` }}
         className="fixed right-5 w-14 h-14 flex items-center justify-center z-30 active:scale-95"
         aria-label="Log workout"
@@ -310,8 +324,10 @@ export default function DashboardPage() {
       {planLog && (
         <Suspense fallback={null}>
           <PlanLogSheet
-            plan={planLog}
-            onClose={() => setPlanLog(null)}
+            plan={planLog.plan}
+            autoStart={planLog.autoStart}
+            bodyWeightKg={latestWeight?.weight ?? undefined}
+            onClose={() => { setPlanLog(null); void refreshPlans(); }}
             onSaved={() => { setPlanLog(null); setLoading(true); load(); void refreshPlans(); }}
           />
         </Suspense>
@@ -322,7 +338,7 @@ export default function DashboardPage() {
             plans={plans}
             today={new Date().toISOString().slice(0, 10)}
             onClose={() => setShowPlans(false)}
-            onOpen={plan => { void openPlan(plan); }}
+            onOpen={plan => { void openPlan(plan, false); }}
           />
         </Suspense>
       )}
@@ -331,9 +347,8 @@ export default function DashboardPage() {
         <Suspense fallback={null}>
           <LogWorkoutSheet
             open={showSheet}
-            autoResume={resumingDraft}
-            onClose={() => { setShowSheet(false); setResumingDraft(false); setDraft(readDraft()); }}
-            onSuccess={() => { setLoading(true); load(); setDraft(null); setResumingDraft(false); }}
+            onClose={() => { setShowSheet(false); setFreeSession(sessionStore.read(null)); setLegacyDraft(hasLegacyDraft()); setLoading(true); load(); }}
+            onSuccess={() => { setLoading(true); load(); setFreeSession(null); setLegacyDraft(false); }}
           />
         </Suspense>
       )}

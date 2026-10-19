@@ -14,6 +14,8 @@ describe('PlanVsActual', () => {
           exercises: [{
             name: 'Bench Press',
             position: 1,
+            load_type: 'total',
+            cardio: null,
             sets: [
               {
                 id: 'hit',
@@ -48,5 +50,57 @@ describe('PlanVsActual', () => {
     expect(text).toContain('hit');
     expect(text).toContain('Actual 8 reps · 60 kg');
     expect(text).toContain('miss');
+  });
+
+  it('reads dumbbell targets per DB and shows the cardio item', () => {
+    render(
+      <PlanVsActual
+        comparison={{
+          day_type: 'Push',
+          plan_date: '2026-10-19',
+          exercises: [
+            {
+              name: 'Incline Dumbbell Press',
+              position: 1,
+              load_type: 'per_dumbbell',
+              cardio: null,
+              sets: [{
+                id: 'db',
+                set_number: 1,
+                set_type: 'top',
+                target_reps_min: 8,
+                target_reps_max: 10,
+                target_weight_kg: 27.5,
+                target_rir_min: 1,
+                target_rir_max: 2,
+                actual: { reps: 9, weight: 55, rpe: 8 },
+              }],
+            },
+            {
+              name: 'Cardio',
+              position: 2,
+              load_type: 'total',
+              sets: [],
+              cardio: {
+                target_duration_min: 20,
+                target_incline_pct: 10,
+                target_speed_kmh: 5.5,
+                target_kcal: 180,
+                label: 'Treadmill incline walk',
+                actual: { minutes: 22, calories: 195, label: 'Treadmill incline walk' },
+              },
+            },
+          ],
+        }}
+      />,
+    );
+    const text = screen.getByLabelText('Planned versus actual').textContent ?? '';
+    expect(text).toContain('Target 8–10 reps · 27.5 kg / DB');
+    expect(text).toContain('Actual 9 reps · 55 kg (27.5 / DB)');
+    expect(text).toContain('hit');
+    expect(text).toContain('cardio · Treadmill incline walk');
+    expect(text).toContain('Target 20 min · 10% incline · 5.5 km/h · 180 kcal');
+    expect(text).toContain('Actual 22 min · 195 kcal');
+    expect(text).toContain('done');
   });
 });

@@ -2,7 +2,7 @@ import { supabase } from '@/db/supabase';
 import { invalidateQueries, readQuery } from '@/lib/queryCache';
 import type { Exercise, CreateExercise } from '@/types';
 
-const EXERCISE_COLUMNS = 'id, name, category, primary_muscle, secondary_muscles, equipment, is_custom, user_id, created_at';
+const EXERCISE_COLUMNS = 'id, name, category, primary_muscle, secondary_muscles, equipment, load_type, is_custom, user_id, created_at';
 
 export const exercisesService = {
   getAll: async (): Promise<Exercise[]> => {
