@@ -20,6 +20,17 @@ Legacy `/history` and `/goals` routes redirect to Home. Body metrics remain avai
 - Shows the latest body metrics snapshot.
 - Lists workout history directly on the Home screen, including guided plan sessions and custom workouts.
 - The floating `+` button opens the free-form workout logger for strength, cardio, sport, mobility, or other workouts.
+- Shows today's coach plan, or the next upcoming plan: day type, exercise count, and Start. All plans opens the upcoming and past list.
+
+## Workout plans
+
+The contract is `docs/WORKOUT_PLANS_CONTRACT.md`. The coach writes with `upsert_workout_plan`, which replaces exercises only while the plan is `planned`.
+
+- Start opens the plan in order. Each set shows its type, target reps, kilograms, RIR, and rest.
+- Logging a set copies the top of the rep range and the target weight. One tap records that set. Sets and exercises can be added or skipped.
+- Saving uses `save_workout`, which stores `strength_sets.plan_set_id` and marks the plan `done` in the same transaction. Starting a plan sets `in_progress`.
+- A finished plan-linked session shows target versus actual, marked hit or miss.
+- The info button on an exercise opens setup, movement, and common mistakes, plus a two-frame image from the Unlicense free-exercise-db when a match exists.
 
 ## Guided Plan
 
@@ -76,6 +87,10 @@ Cardio inside a gym workout:
 | `cardio_metrics` | Older session-level cardio details |
 | `cardio_entries` | Cardio blocks inside a workout: minutes, calories, and type text |
 | `exercises` | System and custom exercises |
+| `workout_plans` | One coach plan per user per date |
+| `plan_exercises` | Ordered exercises inside a plan |
+| `plan_sets` | Target sets: type, reps, load, RIR, rest |
+| `exercise_guidance` | Setup, movement, mistakes, and image frames |
 | `body_metrics` | Daily body measurements |
 | `calorie_logs` | Daily food entries, raw notes, and macros |
 | `daily_steps` | Daily step count |

@@ -8,8 +8,12 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Dumbbell, Plus, ChevronRight, Scale } from 'lucide-react';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
+import TodayPlanCard from '@/components/TodayPlanCard';
+import { plansService, type PlanSummary, type WorkoutPlan } from '@/services/plans';
 
 const LogWorkoutSheet = lazy(() => import('@/components/LogWorkoutSheet'));
+const PlanLogSheet = lazy(() => import('@/components/PlanLogSheet'));
+const PlanListSheet = lazy(() => import('@/components/PlanListSheet'));
 import WeekStrip from '@/components/WeekStrip';
 import { sessionsThisWeekCount } from '@/lib/week';
 
@@ -78,6 +82,10 @@ export default function DashboardPage() {
   const [selectedId,       setSelectedId]       = useState<string | null>(null);
   const [draft,            setDraft]            = useState<DraftMeta | null>(readDraft);
   const [selectedDay,      setSelectedDay]      = useState<string | null>(null);
+  const [plans,            setPlans]            = useState<PlanSummary[]>([]);
+  const [featured,         setFeatured]         = useState<PlanSummary | null>(null);
+  const [planLog,          setPlanLog]          = useState<WorkoutPlan | null>(null);
+  const [showPlans,        setShowPlans]        = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -95,6 +103,24 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const refreshPlans = useCallback(async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const next = await plansService.list();
+    setPlans(next);
+    setFeatured(next.find(plan => plan.plan_date === today)
+      ?? next.find(plan => plan.plan_date > today && plan.status !== 'skipped')
+      ?? null);
+  }, []);
+
+  useEffect(() => { void refreshPlans().catch(() => undefined); }, [refreshPlans]);
+
+  const openPlan = async (plan: PlanSummary) => {
+    const full = await plansService.get(plan.id);
+    if (!full) return;
+    setShowPlans(false);
+    setPlanLog(full);
+  };
 
   const thisWeekCount = sessionsThisWeekCount(recentActivities);
   const lastSession = recentActivities[0] ?? null;
@@ -147,6 +173,14 @@ export default function DashboardPage() {
               <ChevronRight className="w-4 h-4 flex-shrink-0" />
             </button>
           )}
+
+        {featured && (
+          <TodayPlanCard
+            plan={featured}
+            onStart={() => { void openPlan(featured); }}
+            onBrowse={() => setShowPlans(true)}
+          />
+        )}
 
         {/* Head stats */}
         <div className="grid grid-cols-3 gap-2">
@@ -272,6 +306,26 @@ export default function DashboardPage() {
       >
         <Plus className="w-6 h-6 relative z-10" style={{ color: MODERNIST.ground }} />
       </button>
+
+      {planLog && (
+        <Suspense fallback={null}>
+          <PlanLogSheet
+            plan={planLog}
+            onClose={() => setPlanLog(null)}
+            onSaved={() => { setPlanLog(null); setLoading(true); load(); void refreshPlans(); }}
+          />
+        </Suspense>
+      )}
+      {showPlans && (
+        <Suspense fallback={null}>
+          <PlanListSheet
+            plans={plans}
+            today={new Date().toISOString().slice(0, 10)}
+            onClose={() => setShowPlans(false)}
+            onOpen={plan => { void openPlan(plan); }}
+          />
+        </Suspense>
+      )}
 
       {showSheet && (
         <Suspense fallback={null}>

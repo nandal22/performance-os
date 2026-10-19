@@ -281,6 +281,26 @@ try {
   record('workout sheet close button clears a 47px top inset', closeTop >= TOP, `top ${Math.round(closeTop)}px`);
   record('workout sheet safe bar is opaque and 47px', (afterDetail.safeBar?.height ?? 0) >= TOP - 1, `height ${Math.round(afterDetail.safeBar?.height ?? 0)}px`);
 
+  await gotoReady(page, `${BASE}/__shot?shot=plan`, '[data-testid="today-plan"]');
+  await evalIn(page, paintStatusBar(TOP));
+  await delay(100);
+  const planCard = await shot(page, 'plan-card.png');
+  const planTop = await evalIn(page, `document.querySelector('[data-testid="today-plan"] h2')?.getBoundingClientRect().top ?? 0`);
+  record('today plan title clears a 47px top inset', planTop >= TOP, `top ${Math.round(planTop)}px`);
+
+  await gotoReady(page, `${BASE}/__shot?shot=plan-log`, '[data-testid="sheet-header"]');
+  await evalIn(page, paintStatusBar(TOP));
+  await delay(150);
+  const planLog = await shot(page, 'plan-log.png');
+  const logTop = await evalIn(page, `document.querySelector('[data-testid="sheet-header"]')?.getBoundingClientRect().top ?? 0`);
+  record('plan log header clears a 47px top inset', logTop >= TOP, `top ${Math.round(logTop)}px`);
+
+  await gotoReady(page, `${BASE}/__shot?shot=plan-actual`, '[aria-label="Planned versus actual"]');
+  await evalIn(page, paintStatusBar(TOP));
+  await delay(100);
+  const planActual = await shot(page, 'plan-actual.png');
+
+  console.log(`      plan screenshots ${planCard} ${planLog} ${planActual}`);
   console.log(`      progress first content ${progressMs}ms on throttled 4G at 390x844`);
   console.log(`      screenshots ${beforeProgress} ${afterProgressFile} ${beforeDetail} ${afterDetailFile}`);
   console.log(`      resources ${JSON.stringify(resources)}`);
