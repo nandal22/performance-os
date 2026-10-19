@@ -6,7 +6,8 @@ import TodayPlanCard from '@/components/TodayPlanCard';
 import PlanLogSheet from '@/components/PlanLogSheet';
 import PlanVsActual from '@/components/PlanVsActual';
 import type { WorkoutCategory } from '@/types';
-import { DETAIL_PREVIEW, PLAN_COMPARISON, PLAN_PREVIEW, PLAN_SUMMARY, PROGRESS_PREVIEW } from '@/pages/shotFixtures';
+import { DETAIL_PREVIEW, PLAN_COMPARISON, PLAN_PREVIEW, PLAN_SUMMARY, PROGRESS_PREVIEW, RESUMED_SESSION } from '@/pages/shotFixtures';
+import { sessionStorageKey } from '@/lib/workoutSession';
 
 export default function ShotPage() {
   const params = new URLSearchParams(window.location.search);
@@ -29,17 +30,24 @@ export default function ShotPage() {
           <h1 className="text-base font-800">Home</h1>
         </header>
         <main className="px-4 py-5 max-w-lg mx-auto">
-          <TodayPlanCard plan={PLAN_SUMMARY} onStart={() => undefined} onBrowse={() => undefined} />
+          <TodayPlanCard plan={PLAN_SUMMARY} bodyWeightKg={71.4} onStart={() => undefined} onView={() => undefined} onBrowse={() => undefined} />
         </main>
         <BottomNav />
       </div>
     );
   }
 
-  if (shot === 'plan-log') {
+  if (shot === 'plan-view' || shot === 'plan-log' || shot === 'plan-resumed') {
+    // plan-view: planned, not started. plan-log: started, nothing logged. plan-resumed: two sets logged.
+    // Sessions are seeded locally so no shot writes to the server.
+    const key = sessionStorageKey(PLAN_PREVIEW.id);
+    if (shot === 'plan-resumed') localStorage.setItem(key, JSON.stringify(RESUMED_SESSION));
+    else if (shot === 'plan-log') localStorage.setItem(key, JSON.stringify({ ...RESUMED_SESSION, sets: [], cardio: [] }));
+    else localStorage.removeItem(key);
+    const plan = shot === 'plan-view' ? PLAN_PREVIEW : { ...PLAN_PREVIEW, status: 'in_progress' as const, activity_id: PLAN_PREVIEW.id };
     return (
       <div style={{ minHeight: '100dvh', background: '#f3f2f2' }}>
-        <PlanLogSheet plan={PLAN_PREVIEW} onClose={() => undefined} onSaved={() => undefined} />
+        <PlanLogSheet plan={plan} bodyWeightKg={71.4} onClose={() => undefined} onSaved={() => undefined} />
       </div>
     );
   }

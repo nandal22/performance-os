@@ -2,7 +2,7 @@ import { supabase } from '@/db/supabase';
 import { invalidateQueries, readQuery } from '@/lib/queryCache';
 import type { Activity, ActivityListItem, ActivityWithSets, CardioEntry, CreateActivity } from '@/types';
 
-const LIST_COLUMNS = 'id, date, type, sub_type, duration, tags, notes, calories:structured_metrics->calorieEstimate->>calories';
+const LIST_COLUMNS = 'id, date, type, sub_type, duration, tags, notes, status, calories:structured_metrics->calorieEstimate->>calories';
 const LIST_TTL_MS = 60_000;
 
 export interface WorkoutSetInput {

@@ -1,9 +1,16 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetSessions, server, network, syncQueue } from '@/test/mockSessions';
+import { sessionStorageKey } from '@/lib/workoutSession';
 
+vi.mock('@/services/sessions', () => import('@/test/mockSessions'));
+
+beforeEach(() => resetSessions());
 afterEach(() => cleanup());
 import LogWorkoutSheet from './LogWorkoutSheet';
+
+const settle = () => act(async () => { await syncQueue.flush(); });
 
 vi.mock('@/hooks/useAuth', () => ({
   useAuth: () => ({ user: { id: 'user-1' }, session: null, loading: false }),
@@ -19,6 +26,15 @@ vi.mock('@/services/exercises', () => ({
       secondary_muscles: [],
       is_custom: false,
       created_at: '',
+    }, {
+      id: 'hammer',
+      name: 'Hammer Curl',
+      category: 'pull',
+      primary_muscle: 'Biceps',
+      secondary_muscles: [],
+      is_custom: true,
+      created_at: '',
+      load_type: 'per_dumbbell',
     }]),
     getTrackedIds: () => [],
     toggleTracked: () => false,
@@ -90,5 +106,87 @@ describe('LogWorkoutSheet cardio and others', () => {
 
     await user.type(notes, 'Walked the long way home.\nFelt easy.');
     expect((notes as HTMLTextAreaElement).value).toBe('Walked the long way home.\nFelt easy.');
+  });
+});
+
+async function logBench(user: ReturnType<typeof userEvent.setup>, reps: string, weight: string) {
+  await user.type(screen.getByRole('spinbutton', { name: 'Reps' }), reps);
+  await user.type(screen.getByRole('spinbutton', { name: 'Total kg' }), weight);
+  await user.click(screen.getByRole('button', { name: /Log Set|Set Logged/ }));
+}
+
+describe('LogWorkoutSheet persistence', () => {
+  it('saves each set to the server the moment it is logged and resumes after closing', async () => {
+    const user = userEvent.setup();
+    const first = render(<LogWorkoutSheet open onClose={() => undefined} onSuccess={() => undefined} initialExerciseName="Bench Press" />);
+    await settle();
+    await settle();
+    await user.click(screen.getByRole('button', { name: /^Total kg/ }));
+    await logBench(user, '5', '80');
+    await logBench(user, '5', '82.5');
+    await settle();
+    const sets = [...server.state.sets.values()];
+    expect(sets.map(set => [set.set_number, set.reps, set.weight])).toEqual([[1, 5, 80], [2, 5, 82.5]]);
+    const activityId = sets[0].activity_id;
+    expect(server.state.activities.get(activityId)?.status).toBe('in_progress');
+    first.unmount();
+
+    render(<LogWorkoutSheet open onClose={() => undefined} onSuccess={() => undefined} />);
+    expect(screen.getByRole('button', { name: 'Delete Bench Press set 2' })).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'Delete Bench Press set 1' }));
+    await settle();
+    expect([...server.state.sets.values()].map(set => set.weight)).toEqual([82.5]);
+
+    await user.click(screen.getByRole('button', { name: /Finish Workout/ }));
+    await settle();
+    expect(server.state.activities.get(activityId)?.status).toBe('done');
+    expect(server.state.sets.get(sets[1].id)?.set_number).toBe(1);
+    expect(localStorage.getItem(sessionStorageKey(null))).toBeNull();
+  });
+
+  it('queues sets while offline and keeps them through a reload', async () => {
+    const user = userEvent.setup();
+    network.online = false;
+    const first = render(<LogWorkoutSheet open onClose={() => undefined} onSuccess={() => undefined} initialExerciseName="Bench Press" />);
+    await settle();
+    await user.click(screen.getByRole('button', { name: /^Total kg/ }));
+    await logBench(user, '8', '60');
+    await settle();
+    expect(server.state.sets.size).toBe(0);
+    expect(screen.getByTestId('sync-status').textContent).toMatch(/waiting to sync/);
+    first.unmount();
+
+    network.online = true;
+    render(<LogWorkoutSheet open onClose={() => undefined} onSuccess={() => undefined} />);
+    await settle();
+    expect([...server.state.sets.values()].map(set => set.reps)).toEqual([8]);
+  });
+
+  it('moves an old unsaved draft into a saved session once', async () => {
+    localStorage.setItem('perf-os-draft', JSON.stringify({
+      type: 'gym',
+      date: '2026-10-19',
+      savedAt: Date.now(),
+      loggedSets: [{ exercise_id: 'bench', exercise_name: 'Bench Press', reps: 6, weight: 75 }],
+    }));
+    render(<LogWorkoutSheet open onClose={() => undefined} onSuccess={() => undefined} />);
+    await settle();
+    expect(localStorage.getItem('perf-os-draft')).toBeNull();
+    expect([...server.state.sets.values()].map(set => [set.reps, set.weight])).toEqual([[6, 75]]);
+    expect(screen.getByRole('button', { name: 'Delete Bench Press set 1' })).toBeTruthy();
+  });
+
+  it('picks dumbbell entry for an exercise flagged per dumbbell and stores the pair', async () => {
+    const user = userEvent.setup();
+    render(<LogWorkoutSheet open onClose={() => undefined} onSuccess={() => undefined} initialExerciseName="Hammer Curl" />);
+    await settle();
+    expect(await screen.findByText(/Auto-selected from exercise type: dumbbell/)).toBeTruthy();
+    await user.type(screen.getByRole('spinbutton', { name: 'Reps' }), '12');
+    await user.type(screen.getByRole('spinbutton', { name: 'One DB kg' }), '12.5');
+    await user.click(screen.getByRole('button', { name: /Log Set/ }));
+    await settle();
+    expect([...server.state.sets.values()][0]).toMatchObject({ exercise_id: 'hammer', weight: 25, reps: 12 });
+    expect(screen.getByText('(12.5 / DB)')).toBeTruthy();
   });
 });

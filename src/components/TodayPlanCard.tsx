@@ -1,3 +1,4 @@
+import { estimatePlanCalories } from '@/lib/planMath';
 import type { PlanSummary } from '@/services/plans';
 
 const INK = '#201e1d';
@@ -10,12 +11,20 @@ export default function TodayPlanCard({
   plan,
   onStart,
   onBrowse,
+  onView,
+  bodyWeightKg = null,
 }: {
   plan: PlanSummary;
+  bodyWeightKg?: number | null;
   onStart: () => void;
   onBrowse: () => void;
+  /** Opens the plan read-only; nothing is written until Start. */
+  onView?: () => void;
 }) {
   const starting = plan.status === 'planned' || plan.status === 'in_progress';
+  const kcal = estimatePlanCalories(plan.planned, bodyWeightKg);
+  const cardio = plan.planned.filter(item => item.is_cardio).length;
+  const strength = plan.exercise_count - cardio;
   return (
     <section data-testid="today-plan" className="p-4" style={{ border: `2px solid ${INK}`, background: ACCENT_TINT }}>
       <div className="flex items-start justify-between gap-3">
@@ -26,7 +35,8 @@ export default function TodayPlanCard({
           <h2 className="text-lg font-800 leading-tight mt-1">{plan.day_type}</h2>
           {plan.title && <p className="text-sm mt-0.5">{plan.title}</p>}
           <p className="text-[11px] mt-1" style={{ color: MUTED }}>
-            {plan.exercise_count} exercise{plan.exercise_count === 1 ? '' : 's'}
+            {strength} exercise{strength === 1 ? '' : 's'}{cardio > 0 ? ` + ${cardio} cardio` : ''}
+            {kcal != null && <> · <span data-testid="plan-kcal" className="font-800 nums" style={{ color: INK }}>≈ {kcal} kcal est.</span></>}
           </p>
         </div>
         <button
@@ -38,15 +48,29 @@ export default function TodayPlanCard({
           All plans
         </button>
       </div>
-      {starting && (
-        <button
-          type="button"
-          onClick={onStart}
-          className="mt-3 w-full min-h-11 text-sm font-800"
-          style={{ background: ACCENT, color: '#f3f2f2', border: `2px solid ${INK}` }}
-        >
-          {plan.status === 'in_progress' ? 'Continue' : 'Start'}
-        </button>
+      {(starting || onView) && (
+        <div className="mt-3 flex gap-2">
+          {onView && plan.status !== 'in_progress' && (
+            <button
+              type="button"
+              onClick={onView}
+              className="min-h-11 px-4 text-sm font-800"
+              style={{ border: `2px solid ${INK}`, background: '#f3f2f2' }}
+            >
+              View
+            </button>
+          )}
+          {starting && (
+            <button
+              type="button"
+              onClick={onStart}
+              className="flex-1 min-h-11 text-sm font-800"
+              style={{ background: ACCENT, color: '#f3f2f2', border: `2px solid ${INK}` }}
+            >
+              {plan.status === 'in_progress' ? 'Continue' : 'Start'}
+            </button>
+          )}
+        </div>
       )}
     </section>
   );

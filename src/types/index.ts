@@ -40,6 +40,8 @@ export interface Exercise {
   primary_muscle: string;
   secondary_muscles: string[];
   equipment?: Equipment;
+  /** per_dumbbell: plan targets are one dumbbell; logged weight is the pair. */
+  load_type?: 'total' | 'per_dumbbell';
   is_custom: boolean;
   user_id?: string;       // null = system exercise
   created_at: string;
@@ -90,6 +92,7 @@ export interface ActivityListItem {
   duration?: number | null;
   tags: string[] | null;
   notes?: string | null;
+  status?: 'in_progress' | 'done';
   calories?: number | null;
 }
 

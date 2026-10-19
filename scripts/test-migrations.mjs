@@ -89,6 +89,54 @@ SELECT
   (SELECT notes FROM activities WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1') AS gym_notes;
 `;
 
+// Rows that exist before 018: custom dumbbell spellings, one-arm and cable moves, and a
+// coach plan whose dumbbell targets are combined weights, as they were written before 018.
+const seed018 = `
+INSERT INTO exercises (id, name, category, primary_muscle, equipment, is_custom, user_id) VALUES
+  ('e0000000-0000-0000-0000-000000000001', 'Incline Dummbell Press', 'push', 'Chest', NULL, true, '${ownerId}'),
+  ('e0000000-0000-0000-0000-000000000002', 'Shoulder Dumbell Press', 'push', 'Shoulders', NULL, true, '${ownerId}'),
+  ('e0000000-0000-0000-0000-000000000003', 'Hammer Curl', 'pull', 'Biceps', NULL, true, '${ownerId}'),
+  ('e0000000-0000-0000-0000-000000000004', 'Lean-Away Dumbbell Lateral Raise', 'push', 'Shoulders', 'dumbbell', true, '${ownerId}'),
+  ('e0000000-0000-0000-0000-000000000005', 'Cable Lateral Raise', 'push', 'Shoulders', 'cable', true, '${ownerId}'),
+  ('e0000000-0000-0000-0000-000000000006', 'Bulgarian Split Squat', 'legs', 'Quads', 'dumbbell', true, '${ownerId}');
+SELECT upsert_workout_plan(
+  '${ownerId}', '2026-09-20', 'Push', 'Before 018', NULL,
+  jsonb_build_array(
+    jsonb_build_object('position', 1, 'exercise_id', (SELECT id FROM exercises WHERE name = 'Bench Press' AND user_id IS NULL LIMIT 1),
+      'sets', jsonb_build_array(jsonb_build_object('set_number', 1, 'set_type', 'top', 'target_reps_min', 5, 'target_reps_max', 5, 'target_weight_kg', 80))),
+    jsonb_build_object('position', 2, 'exercise_id', 'e0000000-0000-0000-0000-000000000001',
+      'sets', jsonb_build_array(
+        jsonb_build_object('set_number', 1, 'set_type', 'top', 'target_reps_min', 6, 'target_reps_max', 8, 'target_weight_kg', 55),
+        jsonb_build_object('set_number', 2, 'set_type', 'backoff', 'target_reps_min', 8, 'target_reps_max', 10, 'target_weight_kg', 45)))
+  )
+);
+INSERT INTO activities (id, user_id, date, type, duration, notes, structured_metrics) VALUES
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', '${ownerId}', '2026-10-10', 'gym', 50, 'db-day', '{}');
+INSERT INTO strength_sets (activity_id, exercise_id, set_number, reps, weight)
+VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'e0000000-0000-0000-0000-000000000001', 1, 8, 55);
+-- The 013-017 cases compare against the first snapshot; count these rows into it.
+UPDATE test_snapshot SET
+  activities = activities + 1,
+  sets = sets + 1,
+  volume = volume + (SELECT coalesce(sum(volume), 0) FROM strength_sets WHERE activity_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3'),
+  exercises = exercises + 6;
+CREATE TABLE test_snapshot_018 AS
+SELECT
+  (SELECT md5(string_agg(concat_ws('|', id, user_id, date, type, sub_type, duration, notes, tags, structured_metrics), ',' ORDER BY id)) FROM activities) AS activities,
+  (SELECT md5(string_agg(concat_ws('|', id, activity_id, exercise_id, set_number, reps, weight, rpe, volume, plan_set_id), ',' ORDER BY id)) FROM strength_sets) AS sets,
+  (SELECT md5(string_agg(concat_ws('|', id, activity_id, exercise_id, position, duration_minutes, calories, label), ',' ORDER BY id)) FROM cardio_entries) AS cardio,
+  (SELECT md5(string_agg(concat_ws('|', id, name, category, primary_muscle, equipment, is_custom, user_id), ',' ORDER BY id)) FROM exercises) AS exercises;
+`;
+
+const snapshot018 = `
+SELECT
+  (SELECT md5(string_agg(concat_ws('|', id, user_id, date, type, sub_type, duration, notes, tags, structured_metrics), ',' ORDER BY id)) FROM activities) = activities
+  AND (SELECT md5(string_agg(concat_ws('|', id, activity_id, exercise_id, set_number, reps, weight, rpe, volume, plan_set_id), ',' ORDER BY id)) FROM strength_sets) = sets
+  AND (SELECT md5(string_agg(concat_ws('|', id, activity_id, exercise_id, position, duration_minutes, calories, label), ',' ORDER BY id)) FROM cardio_entries) IS NOT DISTINCT FROM cardio
+  AND (SELECT md5(string_agg(concat_ws('|', id, name, category, primary_muscle, equipment, is_custom, user_id), ',' ORDER BY id)) FROM exercises) = exercises
+FROM test_snapshot_018
+`;
+
 const rlsAuto = `
 CREATE OR REPLACE FUNCTION public.rls_auto_enable() RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN END $$;
@@ -103,11 +151,20 @@ try {
 
   const files = readdirSync(join(root, 'supabase/migrations')).filter(name => name.endsWith('.sql')).sort();
   const before = files.filter(name => name < '013_');
-  const after = files.filter(name => name >= '013_');
+  const after = files.filter(name => name >= '013_' && name < '018_');
+  const latest = files.filter(name => name >= '018_');
   for (const name of before) psqlFile(join(root, 'supabase/migrations', name));
   psql(seed);
   psql(rlsAuto);
   for (const name of after) psqlFile(join(root, 'supabase/migrations', name));
+  // Data written by the 017 app and coach, so 018 has existing rows to flag and convert.
+  psql(seed018);
+  for (const name of latest) psqlFile(join(root, 'supabase/migrations', name));
+  const after018 = psql(snapshot018);
+  for (const name of latest) psqlFile(join(root, 'supabase/migrations', name));
+  const rerun018 = psql(snapshot018);
+  // Supabase grants table access to authenticated by default; RLS does the filtering.
+  psql(`GRANT SELECT, INSERT, UPDATE, DELETE ON activities, strength_sets, cardio_entries TO authenticated`);
 
   record('existing activity count is unchanged', () => {
     const value = psql(`SELECT (SELECT count(*) FROM activities) = (SELECT activities FROM test_snapshot)`);
@@ -204,6 +261,9 @@ try {
       'save_workout(date,text,text,integer,text,text[],jsonb,jsonb,jsonb,jsonb,uuid)',
       'get_progress_cards()',
       'upsert_workout_plan(uuid,date,text,text,text,jsonb)',
+      'start_workout_session(uuid,date,text,text,text,text[],uuid)',
+      'finish_workout_session(uuid,integer,text,jsonb,uuid)',
+      'discard_workout_session(uuid)',
     ];
     for (const name of names) {
       const allowed = psql(`SELECT has_function_privilege('anon', 'public.${name}', 'EXECUTE')`);
@@ -216,7 +276,7 @@ try {
       FROM pg_proc p
       JOIN pg_namespace n ON n.oid = p.pronamespace
       WHERE n.nspname = 'public'
-        AND p.proname IN ('get_exercise_summaries', 'get_personal_records', 'get_training_load', 'save_workout', 'get_progress_cards', 'upsert_workout_plan')
+        AND p.proname IN ('get_exercise_summaries', 'get_personal_records', 'get_training_load', 'save_workout', 'get_progress_cards', 'upsert_workout_plan', 'start_workout_session', 'finish_workout_session', 'discard_workout_session')
         AND NOT ('search_path=public' = ANY (COALESCE(p.proconfig, ARRAY[]::text[])))
     `);
     assert(missing === '', missing || 'none');
@@ -463,6 +523,157 @@ try {
     const done = psql(`SELECT status || ',' || activity_id::text FROM workout_plans WHERE id = '${planId}'`);
     assert(linked === setId, linked);
     assert(done === `done,${activityId}`, done);
+  });
+  record('018 leaves existing activities, sets, cardio and exercises byte-identical', () => {
+    assert(after018 === 't', `checksum changed after 018: ${after018}`);
+    const rerun = rerun018;
+    assert(rerun === 't', `checksum changed after rerunning 018: ${rerun}`);
+    const status = psql(`SELECT string_agg(DISTINCT status, ',') FROM activities`);
+    assert(status === 'done', status);
+  });
+  record('load_type defaults to total and rejects junk', () => {
+    const def = psql(`SELECT load_type FROM exercises WHERE name = 'Bench Press' AND user_id IS NULL`);
+    assert(def === 'total', def);
+    const fresh = psql(`INSERT INTO exercises (name, category, primary_muscle) VALUES ('Plain New', 'push', 'Chest') RETURNING load_type`);
+    assert(fresh === 'total', fresh);
+    let rejected = false;
+    try {
+      psql(`UPDATE exercises SET load_type = 'pair' WHERE name = 'Plain New'`);
+    } catch (error) {
+      rejected = /exercises_load_type_check/.test(String(error));
+    }
+    assert(rejected, 'junk load_type accepted');
+    psql(`DELETE FROM exercises WHERE name = 'Plain New'`);
+  });
+  record('dumbbell exercises are flagged per_dumbbell, one-arm and cable ones are not', () => {
+    const flagged = psql(`SELECT string_agg(name, ',' ORDER BY name) FROM exercises WHERE load_type = 'per_dumbbell'`);
+    assert(flagged === 'Bulgarian Split Squat,Dumbbell Flye,Dumbbell Overhead Press,Hammer Curl,Incline Dummbell Press,Lateral Raise,Shoulder Dumbell Press', flagged);
+  });
+  record('existing dumbbell plan targets are halved exactly once', () => {
+    const targets = psql(`
+      SELECT string_agg(e.name || ':' || ps.target_weight_kg::numeric(6,2), ',' ORDER BY pe.position, ps.set_number)
+      FROM workout_plans wp
+      JOIN plan_exercises pe ON pe.plan_id = wp.id
+      JOIN exercises e ON e.id = pe.exercise_id
+      JOIN plan_sets ps ON ps.plan_exercise_id = pe.id
+      WHERE wp.plan_date = '2026-09-20'
+    `);
+    assert(targets === 'Bench Press:80.00,Incline Dummbell Press:27.50,Incline Dummbell Press:22.50', targets);
+    const logged = psql(`SELECT weight FROM strength_sets WHERE activity_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3'`);
+    assert(Number(logged) === 55, `logged weight changed to ${logged}`);
+  });
+  record('upsert_workout_plan stores cardio targets and still accepts the old payload', () => {
+    const cardioId = psql(`SELECT id FROM exercises WHERE user_id IS NULL AND lower(name) = 'cardio'`);
+    const benchId = psql(`SELECT id FROM exercises WHERE user_id IS NULL AND name = 'Bench Press'`);
+    psql(`SELECT upsert_workout_plan('${ownerId}', '2026-11-10', 'Push', 'With cardio', NULL, $json$[
+      {"position":1,"exercise_id":"${benchId}","sets":[{"set_number":1,"set_type":"top","target_reps_min":5,"target_reps_max":5,"target_weight_kg":80,"rest_seconds":120}]},
+      {"position":2,"exercise_id":"${cardioId}","note":"Treadmill incline walk","target_duration_min":20,"target_incline_pct":10,"target_speed_kmh":5.5,"target_kcal":180,"sets":[]}
+    ]$json$::jsonb)`);
+    const cardio = psql(`
+      SELECT concat_ws('|', pe.note, pe.target_duration_min, pe.target_incline_pct, pe.target_speed_kmh, pe.target_kcal, (SELECT count(*) FROM plan_sets WHERE plan_exercise_id = pe.id))
+      FROM plan_exercises pe JOIN workout_plans wp ON wp.id = pe.plan_id
+      WHERE wp.plan_date = '2026-11-10' AND pe.exercise_id = '${cardioId}'
+    `);
+    assert(cardio === 'Treadmill incline walk|20.0|10.0|5.5|180|0', cardio);
+    psql(`SELECT upsert_workout_plan('${ownerId}', '2026-11-11', 'Push', 'Old shape', NULL, $json$[
+      {"position":1,"exercise_id":"${benchId}","superset_group":"","note":"","sets":[{"set_number":1,"target_reps_min":5,"target_reps_max":5,"target_weight_kg":80}]}
+    ]$json$::jsonb)`);
+    const old = psql(`
+      SELECT concat_ws('|', coalesce(pe.target_duration_min::text, 'null'), coalesce(pe.target_kcal::text, 'null'), ps.set_type)
+      FROM plan_exercises pe JOIN workout_plans wp ON wp.id = pe.plan_id JOIN plan_sets ps ON ps.plan_exercise_id = pe.id
+      WHERE wp.plan_date = '2026-11-11'
+    `);
+    assert(old === 'null|null|straight', old);
+    let rejected = false;
+    try {
+      psql(`SELECT upsert_workout_plan('${ownerId}', '2026-11-12', 'Push', 'Bad', NULL, $json$[{"position":1,"exercise_id":"${cardioId}","target_duration_min":-5,"sets":[]}]$json$::jsonb)`);
+    } catch (error) {
+      rejected = /plan_exercises_cardio_targets_check/.test(String(error));
+    }
+    assert(rejected, 'negative cardio duration accepted');
+  });
+  record('plan session start, set writes and finish are idempotent', () => {
+    const planId = psql(`SELECT id FROM workout_plans WHERE plan_date = '2026-11-10'`);
+    const planSet = psql(`SELECT ps.id FROM plan_sets ps JOIN plan_exercises pe ON pe.id = ps.plan_exercise_id WHERE pe.plan_id = '${planId}'`);
+    const cardioItem = psql(`SELECT pe.id FROM plan_exercises pe WHERE pe.plan_id = '${planId}' AND pe.target_kcal IS NOT NULL`);
+    const benchId = psql(`SELECT id FROM exercises WHERE user_id IS NULL AND name = 'Bench Press'`);
+    const cardioId = psql(`SELECT id FROM exercises WHERE user_id IS NULL AND lower(name) = 'cardio'`);
+    const run = sql => psql(`BEGIN; SET LOCAL ROLE authenticated; ${sql}; COMMIT;`);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      run(`SELECT start_workout_session('${planId}', '2026-11-10', 'gym', NULL, NULL, '{}', '${planId}')`);
+    }
+    const started = psql(`SELECT a.status || ',' || wp.status || ',' || wp.activity_id FROM activities a JOIN workout_plans wp ON wp.activity_id = a.id WHERE a.id = '${planId}'`);
+    assert(started === `in_progress,in_progress,${planId}`, started);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      run(`INSERT INTO strength_sets (id, activity_id, exercise_id, set_number, reps, weight, plan_set_id)
+           VALUES ('5e700000-0000-0000-0000-000000000001', '${planId}', '${benchId}', 1, 5, 80, '${planSet}')
+           ON CONFLICT (id) DO UPDATE SET reps = EXCLUDED.reps, weight = EXCLUDED.weight`);
+      run(`INSERT INTO cardio_entries (id, activity_id, exercise_id, position, duration_minutes, calories, label, plan_exercise_id)
+           VALUES ('ca700000-0000-0000-0000-000000000001', '${planId}', '${cardioId}', 1, 20, 180, 'Treadmill incline walk', '${cardioItem}')
+           ON CONFLICT (id) DO UPDATE SET calories = EXCLUDED.calories`);
+    }
+    let duplicate = false;
+    try {
+      run(`INSERT INTO strength_sets (activity_id, exercise_id, set_number, reps, weight, plan_set_id) VALUES ('${planId}', '${benchId}', 2, 5, 80, '${planSet}')`);
+    } catch (error) {
+      duplicate = /strength_sets_activity_plan_set/.test(String(error));
+    }
+    assert(duplicate, 'second row for the same plan set was accepted');
+    let duplicateCardio = false;
+    try {
+      run(`INSERT INTO cardio_entries (activity_id, exercise_id, position, duration_minutes, plan_exercise_id) VALUES ('${planId}', '${cardioId}', 2, 10, '${cardioItem}')`);
+    } catch (error) {
+      duplicateCardio = /cardio_entries_activity_plan_exercise/.test(String(error));
+    }
+    assert(duplicateCardio, 'second cardio row for the same plan item was accepted');
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      run(`SELECT finish_workout_session('${planId}', 45, NULL, '{"calorieEstimate":{"calories":380}}'::jsonb, '${planId}')`);
+    }
+    const done = psql(`
+      SELECT concat_ws('|', a.status, a.duration, a.structured_metrics->'calorieEstimate'->>'calories', wp.status,
+        (SELECT count(*) FROM strength_sets WHERE activity_id = a.id), (SELECT count(*) FROM cardio_entries WHERE activity_id = a.id))
+      FROM activities a JOIN workout_plans wp ON wp.activity_id = a.id WHERE a.id = '${planId}'
+    `);
+    assert(done === 'done|45|380|done|1|1', done);
+    let restart = false;
+    try {
+      run(`SELECT start_workout_session(gen_random_uuid(), '2026-11-10', 'gym', NULL, NULL, '{}', '${planId}')`);
+    } catch (error) {
+      restart = /cannot be started/.test(String(error));
+    }
+    assert(restart, 'a done plan was started again');
+    const stillDone = psql(`SELECT status FROM workout_plans WHERE id = '${planId}'`);
+    assert(stillDone === 'done', stillDone);
+  });
+  record('discarding an unfinished session returns its plan, keeps finished ones', () => {
+    const planId = psql(`SELECT id FROM workout_plans WHERE plan_date = '2026-11-11'`);
+    const run = sql => psql(`BEGIN; SET LOCAL ROLE authenticated; ${sql}; COMMIT;`);
+    run(`SELECT start_workout_session('${planId}', '2026-11-11', 'gym', NULL, NULL, '{}', '${planId}')`);
+    run(`SELECT discard_workout_session('${planId}')`);
+    run(`SELECT discard_workout_session('${planId}')`);
+    const back = psql(`SELECT status || ',' || coalesce(activity_id::text, '') || ',' || (SELECT count(*) FROM activities WHERE id = '${planId}') FROM workout_plans WHERE id = '${planId}'`);
+    assert(back === 'planned,,0', back);
+    run(`SELECT discard_workout_session('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1')`);
+    const kept = psql(`SELECT count(*) FROM activities WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'`);
+    assert(kept === '1', 'a finished workout was discarded');
+  });
+  record('another user cannot start, finish or discard the owner session', () => {
+    const run = sql => psql(`BEGIN; SET LOCAL ROLE authenticated; ${sql}; COMMIT;`);
+    run(`SELECT start_workout_session('5e550000-0000-0000-0000-000000000001', '2026-11-12', 'gym')`);
+    psql(`INSERT INTO auth.users (id) VALUES ('${otherId}') ON CONFLICT DO NOTHING`);
+    psql(`UPDATE auth.uid_override SET id = '${otherId}'`);
+    let finishRefused = false;
+    try {
+      run(`SELECT finish_workout_session('5e550000-0000-0000-0000-000000000001', 10)`);
+    } catch (error) {
+      finishRefused = /not found/.test(String(error));
+    }
+    run(`SELECT discard_workout_session('5e550000-0000-0000-0000-000000000001')`);
+    psql(`UPDATE auth.uid_override SET id = '${ownerId}'`);
+    const owner = psql(`SELECT status || ',' || user_id FROM activities WHERE id = '5e550000-0000-0000-0000-000000000001'`);
+    assert(finishRefused, 'other user finished the session');
+    assert(owner === `in_progress,${ownerId}`, owner);
+    run(`SELECT discard_workout_session('5e550000-0000-0000-0000-000000000001')`);
   });
   record('exercise guidance seed rows are valid', () => {
     const seeded = psql(`
