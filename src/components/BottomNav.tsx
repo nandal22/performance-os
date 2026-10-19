@@ -13,12 +13,14 @@ export default function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 inset-x-0 z-20"
-      style={{ background: '#f3f2f2', borderTop: '2px solid #201e1d', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      data-testid="bottom-nav"
+      className="fixed bottom-0 inset-x-0 z-20 pb-safe"
+      style={{ background: '#f3f2f2', borderTop: '2px solid #201e1d' }}
     >
       <div className="flex max-w-lg mx-auto overflow-x-auto no-scrollbar">
         {TABS.map(({ path, icon: Icon, label }) => {
-          const active = pathname === path;
+          const shot = import.meta.env.DEV ? new URLSearchParams(window.location.search).get('shot') : null;
+          const active = pathname === path || (shot === 'progress' && path === '/progress');
           return (
             <Link
               key={path}

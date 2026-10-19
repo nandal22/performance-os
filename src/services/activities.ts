@@ -139,6 +139,8 @@ export const activitiesService = {
     const { error } = await supabase.from('activities').delete().eq('id', id);
     if (error) throw error;
     invalidateQueries('activities:');
+    invalidateQueries('sets:');
+    invalidateQueries('progress:');
   },
 
   saveWorkout: async (input: {
@@ -164,6 +166,7 @@ export const activitiesService = {
     if (!rpc.error && rpc.data) {
       invalidateQueries('activities:');
       invalidateQueries('sets:');
+      invalidateQueries('progress:');
       return rpc.data as string;
     }
 
@@ -228,6 +231,7 @@ export const activitiesService = {
 
     invalidateQueries('activities:');
     invalidateQueries('sets:');
+    invalidateQueries('progress:');
     return activity.id;
   },
 };

@@ -3,6 +3,12 @@ type Entry = { value: unknown; expires: number };
 const store = new Map<string, Entry>();
 const inflight = new Map<string, Promise<unknown>>();
 
+export function peekQuery<T>(key: string): T | undefined {
+  const hit = store.get(key);
+  if (hit && hit.expires > Date.now()) return hit.value as T;
+  return undefined;
+}
+
 export function readQuery<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<T> {
   const hit = store.get(key);
   if (hit && hit.expires > Date.now()) return Promise.resolve(hit.value as T);

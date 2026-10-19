@@ -104,12 +104,14 @@ export default function ExerciseProgressSheet({ exercise, onClose, onTrackToggle
   const RULE = 'rgba(32,30,29,0.15)';
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end md:items-center md:justify-center">
+    <div className="sheet-overlay z-[60]">
+      <div className="sheet-safe-bar" aria-hidden="true" />
+      <div className="sheet-stage md:items-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
       <div
-        className="relative w-full md:max-w-[620px] max-h-[90vh] flex flex-col overflow-hidden max-w-lg mx-auto"
-        style={{ background: GROUND, color: INK, border: `2px solid ${INK}`, boxShadow: '0 12px 32px rgba(45,43,43,0.25)' }}
+        className="sheet-panel relative md:max-w-[620px] max-w-lg mx-auto"
+        style={{ background: GROUND, color: INK, border: `2px solid ${INK}`, boxShadow: '0 12px 32px rgba(45,43,43,0.25)', maxHeight: 'min(100%, 90vh)' }}
       >
         {/* Header */}
         <div className="flex-shrink-0 flex items-start justify-between gap-3 px-4 pt-4 pb-3" style={{ borderBottom: `2px solid ${INK}` }}>
@@ -202,7 +204,7 @@ export default function ExerciseProgressSheet({ exercise, onClose, onTrackToggle
         </div>
 
         {/* Footer */}
-        <div className="flex-shrink-0 flex gap-2 px-4 py-3" style={{ borderTop: `2px solid ${INK}` }}>
+        <div className="flex-shrink-0 flex gap-2 px-4 py-3" style={{ borderTop: `2px solid ${INK}`, paddingBottom: 'max(0.75rem, var(--sab))' }}>
           <button
             onClick={() => onLogSet?.(exercise)}
             className="h-11 flex-1 px-4 text-sm font-800 text-left"
@@ -214,6 +216,7 @@ export default function ExerciseProgressSheet({ exercise, onClose, onTrackToggle
             Close
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

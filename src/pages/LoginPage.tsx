@@ -38,8 +38,8 @@ export default function LoginPage() {
 
   return (
     <div
-      className="flex min-h-screen flex-col justify-between px-6 py-10 md:px-10"
-      style={{ background: MODERNIST.ground, color: MODERNIST.ink }}
+      className="flex min-h-screen flex-col justify-between px-6 md:px-10"
+      style={{ background: MODERNIST.ground, color: MODERNIST.ink, paddingTop: 'max(2.5rem, var(--sat))', paddingBottom: 'max(2.5rem, var(--sab))' }}
     >
       <header className="text-[11px] font-800 uppercase tracking-[0.14em]">sachinnandal.me</header>
 
