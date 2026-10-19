@@ -2,16 +2,24 @@
 // Visual check at 390x844 with a simulated 47px top inset. Never uses the live database.
 
 import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
-const CHROME = process.env.CHROME_BIN || '/usr/local/bin/google-chrome';
+const CHROME = process.env.CHROME_BIN || [
+  '/usr/local/bin/google-chrome',
+  '/usr/bin/google-chrome',
+  '/opt/google/chrome/chrome',
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+].find(path => existsSync(path)) || '/usr/local/bin/google-chrome';
 const PORT = 5179;
 const BASE = `http://127.0.0.1:${PORT}`;
-const OUT = process.env.SAFE_AREA_OUT || '/opt/cursor/artifacts/screenshots';
+const OUT = process.env.SAFE_AREA_OUT
+  || (existsSync('/opt/cursor/artifacts') ? '/opt/cursor/artifacts/screenshots' : join(tmpdir(), 'perfos-safe-area'));
 const TOP = 47;
 const BOTTOM = 34;
 
@@ -205,8 +213,18 @@ record('sheets reserve env(safe-area-inset-top)', css.includes('height: var(--sa
 record('bottom nav uses env(safe-area-inset-bottom)', css.includes('env(safe-area-inset-bottom, 0px)') && nav.includes('pb-safe') && /\.pb-safe\s*\{[^}]*var\(--sab\)/.test(css));
 if (results.some(result => !result.ok)) process.exit(1);
 
+// The shot pages render fixtures, but the app still builds a Supabase client
+// at import. Point it at an unused local address when no .env is present.
 const vite = spawn('npx', ['vite', '--host', '127.0.0.1', '--port', String(PORT), '--strictPort'], {
   stdio: 'ignore',
+  // Own process group, so the cleanup below also stops the vite child that
+  // npx starts. Otherwise it keeps serving port 5179 to the next run.
+  detached: true,
+  env: {
+    ...process.env,
+    VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || 'http://127.0.0.1:54321',
+    VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || 'safe-area-test-anon-key',
+  },
 });
 
 let chromeMeta;
@@ -273,7 +291,7 @@ try {
   try { page?.ws.close(); } catch { /* already closed */ }
   try { chromeMeta?.chrome.kill('SIGKILL'); } catch { /* already gone */ }
   try { if (chromeMeta) rmSync(chromeMeta.userData, { recursive: true, force: true }); } catch { /* profile busy */ }
-  try { vite.kill('SIGKILL'); } catch { /* already gone */ }
+  try { process.kill(-vite.pid, 'SIGKILL'); } catch { try { vite.kill('SIGKILL'); } catch { /* already gone */ } }
 }
 
 if (results.some(result => !result.ok)) process.exitCode = 1;

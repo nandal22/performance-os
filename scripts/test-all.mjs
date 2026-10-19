@@ -11,7 +11,9 @@ function run(title, command, args) {
 
 const migrations = run('Database migrations', 'node', ['scripts/test-migrations.mjs']);
 const frontend = run('Frontend', 'npx', ['vitest', 'run']);
-const safeArea = run('Safe area', 'node', ['scripts/test-safe-area.mjs']);
+// Node 20 only exposes the global WebSocket the CDP check uses behind a flag.
+const wsFlag = typeof globalThis.WebSocket === 'undefined' ? ['--experimental-websocket'] : [];
+const safeArea = run('Safe area', process.execPath, [...wsFlag, 'scripts/test-safe-area.mjs']);
 
 console.log('\n== Summary ==');
 console.log(`${migrations ? 'PASS' : 'FAIL'}  database migrations`);
