@@ -1,5 +1,6 @@
 import type { ActivityWithSets, Exercise, StrengthSetWithExercise } from '@/types';
 import type { ProgressCard } from '@/services/progressCards';
+import type { PlanComparison, PlanSummary, WorkoutPlan } from '@/services/plans';
 
 const exercise = (id: string, name: string): Exercise => ({
   id,
@@ -109,4 +110,108 @@ export const DETAIL_PREVIEW: ActivityWithSets = {
   updated_at: '',
   strength_sets: [...lateral, ...press, ...face],
   cardio_entries: [],
+};
+
+export const PLAN_SUMMARY: PlanSummary = {
+  id: 'plan-shot',
+  plan_date: '2026-10-19',
+  day_type: 'Pull',
+  title: 'Back and biceps',
+  notes: 'Leave a rep in the tank on the row.',
+  status: 'planned',
+  activity_id: null,
+  exercise_count: 4,
+};
+
+export const PLAN_PREVIEW: WorkoutPlan = {
+  ...PLAN_SUMMARY,
+  exercises: [
+    {
+      id: 'pe-row',
+      position: 1,
+      exercise_id: 'row',
+      exercise_name: 'Barbell Row',
+      superset_group: null,
+      note: null,
+      sets: [
+        {
+          id: 'ps-row-1',
+          set_number: 1,
+          set_type: 'warmup',
+          target_reps_min: 8,
+          target_reps_max: 10,
+          target_weight_kg: 40,
+          target_rir_min: 3,
+          target_rir_max: 4,
+          rest_seconds: 60,
+          note: null,
+        },
+        {
+          id: 'ps-row-2',
+          set_number: 2,
+          set_type: 'top',
+          target_reps_min: 6,
+          target_reps_max: 8,
+          target_weight_kg: 70,
+          target_rir_min: 1,
+          target_rir_max: 2,
+          rest_seconds: 150,
+          note: null,
+        },
+      ],
+    },
+    {
+      id: 'pe-curl',
+      position: 2,
+      exercise_id: 'curl',
+      exercise_name: 'Barbell Curl',
+      superset_group: null,
+      note: null,
+      sets: [{
+        id: 'ps-curl-1',
+        set_number: 1,
+        set_type: 'straight',
+        target_reps_min: 10,
+        target_reps_max: 12,
+        target_weight_kg: 30,
+        target_rir_min: 2,
+        target_rir_max: 2,
+        rest_seconds: 90,
+        note: null,
+      }],
+    },
+  ],
+};
+
+export const PLAN_COMPARISON: PlanComparison = {
+  day_type: 'Pull',
+  plan_date: '2026-10-17',
+  exercises: [{
+    name: 'Barbell Row',
+    position: 1,
+    sets: [
+      {
+        id: 'cmp-1',
+        set_number: 1,
+        set_type: 'top',
+        target_reps_min: 6,
+        target_reps_max: 8,
+        target_weight_kg: 70,
+        target_rir_min: 1,
+        target_rir_max: 2,
+        actual: { reps: 8, weight: 70, rpe: 8 },
+      },
+      {
+        id: 'cmp-2',
+        set_number: 2,
+        set_type: 'backoff',
+        target_reps_min: 8,
+        target_reps_max: 10,
+        target_weight_kg: 60,
+        target_rir_min: 2,
+        target_rir_max: 3,
+        actual: { reps: 8, weight: 50, rpe: 7 },
+      },
+    ],
+  }],
 };

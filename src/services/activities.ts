@@ -10,6 +10,8 @@ export interface WorkoutSetInput {
   set_number: number;
   reps: number;
   weight?: number;
+  rpe?: number | null;
+  plan_set_id?: string | null;
 }
 
 export interface WorkoutCardioInput {
@@ -149,6 +151,7 @@ export const activitiesService = {
     sets: WorkoutSetInput[];
     cardio: WorkoutCardioInput[];
     legacyCardio?: { distance?: number; avg_heart_rate?: number; calories?: number } | null;
+    planId?: string | null;
   }): Promise<string> => {
     const rpc = await supabase.rpc('save_workout', {
       p_date: input.activity.date,
@@ -161,12 +164,14 @@ export const activitiesService = {
       p_sets: input.sets,
       p_cardio: input.cardio,
       p_legacy_cardio: input.legacyCardio ?? null,
+      p_plan_id: input.planId ?? null,
     });
 
     if (!rpc.error && rpc.data) {
       invalidateQueries('activities:');
       invalidateQueries('sets:');
       invalidateQueries('progress:');
+      invalidateQueries('plans:');
       return rpc.data as string;
     }
 
@@ -189,6 +194,8 @@ export const activitiesService = {
               set_number: set.set_number,
               reps: set.reps,
               weight: set.weight,
+              rpe: set.rpe ?? null,
+              plan_set_id: set.plan_set_id ?? null,
             })),
         );
         if (error) throw error;
@@ -229,9 +236,13 @@ export const activitiesService = {
       throw error;
     }
 
+    if (input.planId) {
+      await supabase.from('workout_plans').update({ activity_id: activity.id, status: 'done' }).eq('id', input.planId);
+    }
     invalidateQueries('activities:');
     invalidateQueries('sets:');
     invalidateQueries('progress:');
+    invalidateQueries('plans:');
     return activity.id;
   },
 };

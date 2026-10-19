@@ -4,12 +4,15 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import type { ActivityWithSets, CardioCalorieSource, CardioMethod, StrengthSetWithExercise } from '@/types';
 import { activitiesService } from '@/services/activities';
+import { plansService, type PlanComparison } from '@/services/plans';
+import PlanVsActual from '@/components/PlanVsActual';
 
 interface Props {
   activityId: string | null;
   onClose: () => void;
   onDeleted: () => void;
   preview?: ActivityWithSets | null;
+  previewComparison?: PlanComparison | null;
 }
 
 interface GuidedMetrics {
@@ -81,22 +84,24 @@ const CARDIO_METHOD_LABELS: Record<CardioMethod, string> = {
   cult_hrx: 'Cult HRX',
 };
 
-export default function WorkoutDetailSheet({ activityId, onClose, onDeleted, preview = null }: Props) {
+export default function WorkoutDetailSheet({ activityId, onClose, onDeleted, preview = null, previewComparison = null }: Props) {
   const [activity, setActivity] = useState<ActivityWithSets | null>(preview);
+  const [comparison, setComparison] = useState<PlanComparison | null>(previewComparison);
   const [loading, setLoading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    if (preview) { setActivity(preview); return; }
-    if (!activityId) { setActivity(null); return; }
+    if (preview) { setActivity(preview); setComparison(previewComparison); return; }
+    if (!activityId) { setActivity(null); setComparison(null); return; }
     setLoading(true);
     setConfirmDelete(false);
     activitiesService.getById(activityId)
       .then(setActivity)
       .catch(() => toast.error('Failed to load workout'))
       .finally(() => setLoading(false));
-  }, [activityId, preview]);
+    plansService.comparison(activityId).then(setComparison).catch(() => setComparison(null));
+  }, [activityId, preview, previewComparison]);
 
   if (!activityId) return null;
 
@@ -301,6 +306,8 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted, pre
                   </div>
                 </div>
               )}
+
+              {comparison && <PlanVsActual comparison={comparison} />}
 
               {/* Strength sets by exercise */}
               {exerciseOrder.map(exId => (

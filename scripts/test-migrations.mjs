@@ -201,8 +201,9 @@ try {
       'get_personal_records()',
       'get_training_load(integer)',
       'rls_auto_enable()',
-      'save_workout(date,text,text,integer,text,text[],jsonb,jsonb,jsonb,jsonb)',
+      'save_workout(date,text,text,integer,text,text[],jsonb,jsonb,jsonb,jsonb,uuid)',
       'get_progress_cards()',
+      'upsert_workout_plan(uuid,date,text,text,text,jsonb)',
     ];
     for (const name of names) {
       const allowed = psql(`SELECT has_function_privilege('anon', 'public.${name}', 'EXECUTE')`);
@@ -215,7 +216,7 @@ try {
       FROM pg_proc p
       JOIN pg_namespace n ON n.oid = p.pronamespace
       WHERE n.nspname = 'public'
-        AND p.proname IN ('get_exercise_summaries', 'get_personal_records', 'get_training_load', 'save_workout', 'get_progress_cards')
+        AND p.proname IN ('get_exercise_summaries', 'get_personal_records', 'get_training_load', 'save_workout', 'get_progress_cards', 'upsert_workout_plan')
         AND NOT ('search_path=public' = ANY (COALESCE(p.proconfig, ARRAY[]::text[])))
     `);
     assert(missing === '', missing || 'none');
@@ -303,6 +304,192 @@ try {
     `);
     console.log(`      progress payload ${cardBytes} bytes (${gzipSync(payload).length} gzip), raw owner sets ${rawBytes} bytes (${gzipSync(rawText).length} gzip)`);
     assert(cardBytes < rawBytes, `card payload ${cardBytes} is not smaller than raw ${rawBytes}`);
+  });
+  record('workout plan constraints and unique keys', () => {
+    const bench = psql(`SELECT id FROM exercises WHERE user_id IS NULL AND name = 'Bench Press' LIMIT 1`);
+    const planId = psql(`INSERT INTO workout_plans (user_id, plan_date, day_type) VALUES ('${ownerId}', '2026-10-20', 'Push') RETURNING id`);
+    let uniqueDate = false;
+    try {
+      psql(`INSERT INTO workout_plans (user_id, plan_date, day_type) VALUES ('${ownerId}', '2026-10-20', 'Pull')`);
+    } catch (error) {
+      uniqueDate = /unique|workout_plans_user_date/i.test(String(error));
+      if (!uniqueDate) throw error;
+    }
+    assert(uniqueDate, 'duplicate plan date was accepted');
+    let badStatus = false;
+    try {
+      psql(`INSERT INTO workout_plans (user_id, plan_date, day_type, status) VALUES ('${ownerId}', '2026-10-21', 'Push', 'nope')`);
+    } catch (error) {
+      badStatus = /workout_plans_status_check|check constraint/i.test(String(error));
+      if (!badStatus) throw error;
+    }
+    assert(badStatus, 'bad status was accepted');
+    const exerciseId = psql(`INSERT INTO plan_exercises (plan_id, position, exercise_id) VALUES ('${planId}', 1, '${bench}') RETURNING id`);
+    let uniquePosition = false;
+    try {
+      psql(`INSERT INTO plan_exercises (plan_id, position, exercise_id) VALUES ('${planId}', 1, '${bench}')`);
+    } catch (error) {
+      uniquePosition = /unique|plan_exercises_plan_position/i.test(String(error));
+      if (!uniquePosition) throw error;
+    }
+    assert(uniquePosition, 'duplicate exercise position was accepted');
+    psql(`INSERT INTO plan_sets (plan_exercise_id, set_number, set_type, target_reps_min, target_reps_max) VALUES ('${exerciseId}', 1, 'warmup', 8, 10)`);
+    let uniqueSet = false;
+    try {
+      psql(`INSERT INTO plan_sets (plan_exercise_id, set_number, set_type, target_reps_min, target_reps_max) VALUES ('${exerciseId}', 1, 'top', 5, 5)`);
+    } catch (error) {
+      uniqueSet = /unique|plan_sets_exercise_number/i.test(String(error));
+      if (!uniqueSet) throw error;
+    }
+    assert(uniqueSet, 'duplicate set number was accepted');
+    let badReps = false;
+    try {
+      psql(`INSERT INTO plan_sets (plan_exercise_id, set_number, set_type, target_reps_min, target_reps_max) VALUES ('${exerciseId}', 2, 'straight', 10, 8)`);
+    } catch (error) {
+      badReps = /plan_sets_reps_check|check constraint/i.test(String(error));
+      if (!badReps) throw error;
+    }
+    assert(badReps, 'reps min above max was accepted');
+    let badType = false;
+    try {
+      psql(`INSERT INTO plan_sets (plan_exercise_id, set_number, set_type, target_reps_min, target_reps_max) VALUES ('${exerciseId}', 3, 'drop', 8, 8)`);
+    } catch (error) {
+      badType = /plan_sets_type_check|check constraint/i.test(String(error));
+      if (!badType) throw error;
+    }
+    assert(badType, 'junk set type was accepted');
+  });
+  record('coach upsert replaces a planned workout and refuses a started one', () => {
+    const bench = psql(`SELECT id FROM exercises WHERE user_id IS NULL AND name = 'Bench Press' LIMIT 1`);
+    const squat = psql(`SELECT id FROM exercises WHERE user_id IS NULL AND name = 'Squat' LIMIT 1`);
+    const planId = psql(`
+      SELECT upsert_workout_plan(
+        '${ownerId}', '2026-11-02', 'Push', 'First', 'notes',
+        $json$[{"position":1,"exercise_id":"${bench}","sets":[{"set_number":1,"set_type":"warmup","target_reps_min":8,"target_reps_max":10,"target_weight_kg":40,"rest_seconds":60}]}] $json$::jsonb
+      )
+    `);
+    const replaced = psql(`
+      SELECT upsert_workout_plan(
+        '${ownerId}', '2026-11-02', 'Push', 'Second', 'notes',
+        $json$[{"position":1,"exercise_id":"${squat}","sets":[{"set_number":1,"set_type":"top","target_reps_min":5,"target_reps_max":5,"target_weight_kg":100}]}] $json$::jsonb
+      )
+    `);
+    assert(replaced === planId, `ids ${planId} ${replaced}`);
+    const names = psql(`SELECT string_agg(e.name, ',') FROM plan_exercises pe JOIN exercises e ON e.id = pe.exercise_id WHERE pe.plan_id = '${planId}'`);
+    assert(names === 'Squat', names);
+    psql(`UPDATE workout_plans SET status = 'in_progress' WHERE id = '${planId}'`);
+    let refused = false;
+    try {
+      psql(`SELECT upsert_workout_plan('${ownerId}', '2026-11-02', 'Legs', 'Nope', NULL, '[]'::jsonb)`);
+    } catch (error) {
+      refused = /cannot be replaced/i.test(String(error));
+      if (!refused) throw error;
+    }
+    assert(refused, 'in-progress plan was replaced');
+    const still = psql(`SELECT title FROM workout_plans WHERE id = '${planId}'`);
+    assert(still === 'Second', still);
+    psql(`UPDATE workout_plans SET status = 'done' WHERE id = '${planId}'`);
+    let doneRefused = false;
+    try {
+      psql(`SELECT upsert_workout_plan('${ownerId}', '2026-11-02', 'Legs', 'Later', NULL, '[]'::jsonb)`);
+    } catch (error) {
+      doneRefused = /cannot be replaced/i.test(String(error));
+      if (!doneRefused) throw error;
+    }
+    assert(doneRefused, 'done plan was replaced');
+  });
+  record('another user and anon cannot read or edit workout plans', () => {
+    psql(`INSERT INTO auth.users (id) VALUES ('${otherId}') ON CONFLICT DO NOTHING`);
+    for (const table of ['workout_plans', 'plan_exercises', 'plan_sets', 'exercise_guidance']) {
+      const allowed = psql(`SELECT has_table_privilege('anon', 'public.${table}', 'SELECT')`);
+      assert(allowed === 'f', `${table} is visible to anon`);
+    }
+    psql(`UPDATE auth.uid_override SET id = '${otherId}'`);
+    const visible = psql(`BEGIN; SET LOCAL ROLE authenticated; SELECT count(*) FROM workout_plans; ROLLBACK;`);
+    const changed = psql(`BEGIN; SET LOCAL ROLE authenticated; WITH changed AS (UPDATE workout_plans SET title = 'Hacked' RETURNING id) SELECT count(*) FROM changed; ROLLBACK;`);
+    psql(`UPDATE auth.uid_override SET id = '${ownerId}'`);
+    const ownerVisible = psql(`BEGIN; SET LOCAL ROLE authenticated; SELECT count(*) FROM workout_plans; ROLLBACK;`);
+    assert(visible === '0', `other user saw ${visible}`);
+    assert(changed === '0', `other user edited ${changed}`);
+    assert(Number(ownerVisible) > 0, `owner saw ${ownerVisible}`);
+    const title = psql(`SELECT title FROM workout_plans WHERE plan_date = '2026-11-02'`);
+    assert(title === 'Second', title);
+  });
+  record('save_workout links the plan and rolls back together', () => {
+    psql(`
+      SELECT upsert_workout_plan(
+        '${ownerId}', '2026-11-03', 'Pull', 'Link', NULL,
+        $json$[{"position":1,"exercise_id":"${psql(`SELECT id FROM exercises WHERE user_id IS NULL AND name = 'Barbell Row' LIMIT 1`)}","sets":[{"set_number":1,"set_type":"straight","target_reps_min":8,"target_reps_max":8,"target_weight_kg":60,"rest_seconds":90}]}] $json$::jsonb
+      )
+    `);
+    const planId = psql(`SELECT id FROM workout_plans WHERE plan_date = '2026-11-03'`);
+    const setId = psql(`SELECT ps.id FROM plan_sets ps JOIN plan_exercises pe ON pe.id = ps.plan_exercise_id WHERE pe.plan_id = '${planId}'`);
+    const exerciseId = psql(`SELECT exercise_id FROM plan_exercises WHERE plan_id = '${planId}'`);
+    psql(`UPDATE workout_plans SET status = 'in_progress' WHERE id = '${planId}'`);
+    const before = psql(`SELECT count(*) FROM activities`);
+    let failed = false;
+    try {
+      psql(`
+        SELECT save_workout(
+          '2026-11-03'::date, 'gym', NULL, 40, 'plan-fail', ARRAY[]::text[], '{}'::jsonb,
+          jsonb_build_array(jsonb_build_object(
+            'exercise_id', '${exerciseId}',
+            'set_number', 1, 'reps', 8, 'weight', 60,
+            'plan_set_id', '99999999-9999-9999-9999-999999999999'
+          )),
+          '[]'::jsonb, NULL, '${planId}'::uuid
+        )
+      `);
+    } catch (error) {
+      failed = /foreign key|violates|plan_set/i.test(String(error));
+      if (!failed) throw error;
+    }
+    assert(failed, 'bad plan set did not fail');
+    const after = psql(`SELECT count(*) FROM activities`);
+    const status = psql(`SELECT status || ',' || COALESCE(activity_id::text, '') FROM workout_plans WHERE id = '${planId}'`);
+    assert(before === after && status === 'in_progress,', `before ${before} after ${after} status ${status}`);
+    const activityId = psql(`
+      SELECT save_workout(
+        '2026-11-03'::date, 'gym', NULL, 40, 'plan-ok', ARRAY[]::text[], '{}'::jsonb,
+        jsonb_build_array(jsonb_build_object(
+          'exercise_id', '${exerciseId}',
+          'set_number', 1, 'reps', 8, 'weight', 60, 'rpe', 8,
+          'plan_set_id', '${setId}'
+        )),
+        '[]'::jsonb, NULL, '${planId}'::uuid
+      )
+    `);
+    const linked = psql(`SELECT plan_set_id::text FROM strength_sets WHERE activity_id = '${activityId}'`);
+    const done = psql(`SELECT status || ',' || activity_id::text FROM workout_plans WHERE id = '${planId}'`);
+    assert(linked === setId, linked);
+    assert(done === `done,${activityId}`, done);
+  });
+  record('exercise guidance seed rows are valid', () => {
+    const seeded = psql(`
+      SELECT count(*) FROM exercise_guidance g
+      JOIN exercises e ON e.id = g.exercise_id
+      WHERE e.user_id IS NULL
+        AND COALESCE(g.setup, '') <> ''
+        AND COALESCE(g.movement, '') <> ''
+        AND COALESCE(g.common_mistakes, '') <> ''
+        AND COALESCE(g.source, '') <> ''
+        AND g.license IN ('Unlicense', 'original')
+    `);
+    assert(Number(seeded) >= 24, seeded);
+    const images = psql(`
+      SELECT array_length(g.image_urls, 1)
+      FROM exercise_guidance g
+      JOIN exercises e ON e.id = g.exercise_id
+      WHERE e.user_id IS NULL AND e.name = 'Bench Press'
+    `);
+    assert(images === '2', images);
+    const licence = psql(`
+      SELECT g.license || ' ' || g.image_urls[1]
+      FROM exercise_guidance g
+      JOIN exercises e ON e.id = g.exercise_id
+      WHERE e.name = 'Bench Press' AND e.user_id IS NULL
+    `);
+    assert(licence.startsWith('Unlicense https://raw.githubusercontent.com/yuhonas/free-exercise-db/'), licence);
   });
 } finally {
   try {
