@@ -11,12 +11,15 @@ export default function TodayPlanCard({
   plan,
   onStart,
   onBrowse,
+  onView,
   bodyWeightKg = null,
 }: {
   plan: PlanSummary;
   bodyWeightKg?: number | null;
   onStart: () => void;
   onBrowse: () => void;
+  /** Opens the plan read-only; nothing is written until Start. */
+  onView?: () => void;
 }) {
   const starting = plan.status === 'planned' || plan.status === 'in_progress';
   const kcal = estimatePlanCalories(plan.planned, bodyWeightKg);
@@ -45,15 +48,29 @@ export default function TodayPlanCard({
           All plans
         </button>
       </div>
-      {starting && (
-        <button
-          type="button"
-          onClick={onStart}
-          className="mt-3 w-full min-h-11 text-sm font-800"
-          style={{ background: ACCENT, color: '#f3f2f2', border: `2px solid ${INK}` }}
-        >
-          {plan.status === 'in_progress' ? 'Continue' : 'Start'}
-        </button>
+      {(starting || onView) && (
+        <div className="mt-3 flex gap-2">
+          {onView && plan.status !== 'in_progress' && (
+            <button
+              type="button"
+              onClick={onView}
+              className="min-h-11 px-4 text-sm font-800"
+              style={{ border: `2px solid ${INK}`, background: '#f3f2f2' }}
+            >
+              View
+            </button>
+          )}
+          {starting && (
+            <button
+              type="button"
+              onClick={onStart}
+              className="flex-1 min-h-11 text-sm font-800"
+              style={{ background: ACCENT, color: '#f3f2f2', border: `2px solid ${INK}` }}
+            >
+              {plan.status === 'in_progress' ? 'Continue' : 'Start'}
+            </button>
+          )}
+        </div>
       )}
     </section>
   );

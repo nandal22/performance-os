@@ -72,6 +72,9 @@ function withoutKey<T>(record: Record<string, T>, key: string) {
   return next;
 }
 
+// A second tap this soon after the first is a double tap, not an undo.
+const DOUBLE_TAP_MS = 450;
+
 function sameDraft(a: Draft, b: Draft) {
   return a.reps === b.reps && a.weight === b.weight && a.rpe === b.rpe;
 }
@@ -154,6 +157,17 @@ export default function PlanLogSheet({
   const [exerciseChoices, setExerciseChoices] = useState<{ id: string; name: string }[]>([]);
   const sync = useSyncStatus(session?.activityId ?? null);
   const readOnly = !session && (plan.status === 'done' || plan.status === 'skipped');
+  // A planned workout opened without Start: read it, write nothing until Start is tapped.
+  const [starting, setStarting] = useState(autoStart || plan.status === 'in_progress');
+  const viewOnly = !session && !readOnly && !starting;
+
+  const lastTap = useRef<Record<string, number>>({});
+  const isDoubleTap = (key: string) => {
+    const now = Date.now();
+    const previous = lastTap.current[key] ?? -Infinity;
+    lastTap.current[key] = now;
+    return now - previous < DOUBLE_TAP_MS;
+  };
 
   const commit = (next: WorkoutSession | null) => {
     sessionRef.current = next;
@@ -194,6 +208,7 @@ export default function PlanLogSheet({
         }
       }
       if (autoStart || plan.status === 'in_progress') ensureSession();
+      else setStarting(false);
     };
     void resume();
     return () => { cancelled = true; };
@@ -213,14 +228,20 @@ export default function PlanLogSheet({
   };
 
   const logRow = (row: Row) => {
+    if (isDoubleTap(`log:${row.key}`)) return;
     const draft = valueOf(row);
     const reps = Number(draft.reps);
     if (!Number.isFinite(reps) || reps <= 0) {
       toast.error('Enter reps');
       return;
     }
-    if (row.logged && sameDraft(draft, draftFromSet(row.logged))) return;
-    const current = ensureSession();
+    // Tapping a logged, unchanged set again undoes it: the row is deleted and the set is pending again.
+    if (row.logged && sameDraft(draft, draftFromSet(row.logged))) {
+      deleteRow(row);
+      return;
+    }
+    let current = ensureSession();
+    if (current.skipped.includes(row.key)) current = sessionStore.patch(current, { skipped: current.skipped.filter(key => key !== row.key) });
     const set: SessionSet = {
       id: row.logged?.id ?? (row.planSetId ? newId() : row.key),
       exercise_id: row.exerciseId,
@@ -237,13 +258,14 @@ export default function PlanLogSheet({
     setDrafts(current => withoutKey(current, row.key));
   };
 
-  const deleteRow = (row: Row) => {
+  function deleteRow(row: Row) {
     if (!row.logged || !sessionRef.current) return;
     commit(sessionStore.deleteSet(sessionRef.current, row.logged.id));
     setDrafts(current => withoutKey(current, row.key));
-  };
+  }
 
   const toggleSkip = (row: Row) => {
+    if (isDoubleTap(`skip:${row.key}`)) return;
     const current = ensureSession();
     const skipped = current.skipped.includes(row.key)
       ? current.skipped.filter(key => key !== row.key)
@@ -354,6 +376,11 @@ export default function PlanLogSheet({
 
   const loggedCount = (session?.sets.length ?? 0) + (session?.cardio.length ?? 0);
 
+  const start = () => {
+    setStarting(true);
+    ensureSession();
+  };
+
   return (
     <div className="sheet-overlay z-50">
       <div className="sheet-safe-bar" aria-hidden="true" />
@@ -363,7 +390,7 @@ export default function PlanLogSheet({
           <div data-testid="sheet-header" className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `2px solid ${INK}` }}>
             <div className="min-w-0">
               <p className="text-[10px] font-800 uppercase tracking-[0.1em]" style={{ color: MUTED }}>
-                {plan.plan_date}{session ? ' · in progress' : ''}
+                {plan.plan_date}{session ? ' · in progress' : viewOnly ? ' · view only' : ''}
               </p>
               <h2 className="text-base font-800">{plan.day_type}</h2>
             </div>
@@ -409,13 +436,25 @@ export default function PlanLogSheet({
                     Info
                   </button>
                 </div>
-                {group.rows.map(row => {
+                {viewOnly && group.rows.map(row => (
+                  <div key={row.key} data-testid="plan-view-set" className="flex items-start justify-between gap-3 px-3 py-2.5" style={{ borderTop: `2px solid ${RULE}`, background: PANEL }}>
+                    <p className="text-[11px] font-800 uppercase flex-none">Set {row.setNumber} · {row.setType}</p>
+                    <div className="text-right min-w-0">
+                      <p className="text-sm font-800 nums">{row.targetLabel}</p>
+                      <p className="text-[11px] nums" style={{ color: MUTED }}>
+                        {[row.rirLabel, row.restSeconds != null ? `Rest ${row.restSeconds}s` : ''].filter(Boolean).join(' · ')}
+                        {row.loadType === 'per_dumbbell' && row.prefill.weight !== '' ? `${row.rirLabel || row.restSeconds != null ? ' · ' : ''}log ${row.prefill.weight} kg pair` : ''}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {!viewOnly && group.rows.map(row => {
                   const value = valueOf(row);
                   const skipped = session?.skipped.includes(row.key) ?? false;
                   const changed = row.logged ? !sameDraft(value, draftFromSet(row.logged)) : false;
                   const weightNumber = Number(value.weight);
                   return (
-                    <div key={row.key} className="px-3 py-3 space-y-2" style={{ borderTop: `2px solid ${RULE}`, background: PANEL }}>
+                    <div key={row.key} data-testid="plan-set-row" data-state={row.logged ? 'logged' : skipped ? 'skipped' : 'pending'} className="px-3 py-3 space-y-2" style={{ borderTop: `2px solid ${RULE}`, borderLeft: `6px solid ${row.logged ? INK : skipped ? MUTED : 'transparent'}`, background: PANEL, opacity: skipped ? 0.7 : 1 }}>
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-[11px] font-800 uppercase">{row.setType}</p>
                         <p className="text-[11px] text-right" style={{ color: MUTED }}>{row.targetLabel}{row.rirLabel ? ` · ${row.rirLabel}` : ''}</p>
@@ -470,34 +509,43 @@ export default function PlanLogSheet({
                         <div className="flex gap-2">
                           <button
                             type="button"
+                            aria-pressed={Boolean(row.logged) && !changed}
+                            aria-label={!row.logged ? `Log set ${row.setNumber}` : changed ? `Update set ${row.setNumber}` : `Logged set ${row.setNumber}, tap to undo`}
+                            data-state={!row.logged ? 'pending' : changed ? 'changed' : 'logged'}
                             onClick={() => logRow(row)}
-                            className="min-h-11 flex-1 text-sm font-800"
+                            disabled={skipped}
+                            className="min-h-11 flex-1 text-sm font-800 disabled:opacity-40"
                             style={{
-                              background: row.logged && !changed ? INK : GROUND,
-                              color: row.logged && !changed ? GROUND : INK,
+                              background: row.logged && !changed ? INK : changed ? ACCENT : GROUND,
+                              color: row.logged || changed ? GROUND : INK,
                               border: `2px solid ${INK}`,
                             }}
                           >
-                            {!row.logged ? `Log set ${row.setNumber}` : changed ? `Update set ${row.setNumber}` : `Logged set ${row.setNumber}`}
+                            {!row.logged ? `Log set ${row.setNumber}` : changed ? `Update set ${row.setNumber}` : `✓ Logged set ${row.setNumber} · undo`}
                           </button>
                           {row.logged ? (
-                            <button
-                              type="button"
-                              aria-label={`Delete ${row.exerciseName} set ${row.setNumber}`}
-                              onClick={() => deleteRow(row)}
-                              className="min-h-11 min-w-11 px-3 text-sm font-800"
-                              style={{ border: `2px solid ${INK}`, color: ACCENT_DEEP }}
-                            >
-                              Delete
-                            </button>
+                            changed && (
+                              <button
+                                type="button"
+                                aria-label={`Undo ${row.exerciseName} set ${row.setNumber}`}
+                                onClick={() => deleteRow(row)}
+                                className="min-h-11 min-w-11 px-3 text-sm font-800"
+                                style={{ border: `2px solid ${INK}`, color: ACCENT_DEEP }}
+                              >
+                                Undo
+                              </button>
+                            )
                           ) : (
                             <button
                               type="button"
+                              aria-pressed={skipped}
+                              aria-label={skipped ? `Skipped set ${row.setNumber}, tap to undo` : `Skip set ${row.setNumber}`}
+                              data-state={skipped ? 'skipped' : 'pending'}
                               onClick={() => toggleSkip(row)}
                               className="min-h-11 px-3 text-sm font-800"
-                              style={{ border: `2px solid ${INK}` }}
+                              style={{ border: `2px solid ${INK}`, background: skipped ? INK : GROUND, color: skipped ? GROUND : INK }}
                             >
-                              {skipped ? 'Skipped' : `Skip set ${row.setNumber}`}
+                              {skipped ? '✓ Skipped · undo' : `Skip set ${row.setNumber}`}
                             </button>
                           )}
                         </div>
@@ -505,7 +553,7 @@ export default function PlanLogSheet({
                     </div>
                   );
                 })}
-                {!readOnly && (
+                {!readOnly && !viewOnly && (
                   <button type="button" onClick={() => addExtra(group.exerciseId, group.name)} className="w-full min-h-11 text-[11px] font-800" style={{ borderTop: `2px solid ${INK}` }}>
                     Add set
                   </button>
@@ -525,7 +573,11 @@ export default function PlanLogSheet({
                     <p className="text-[11px] font-800 uppercase">Cardio</p>
                   </div>
                   <div className="px-3 py-3 space-y-2" style={{ background: PANEL }}>
-                    <p className="text-[11px]" style={{ color: MUTED }}>Target {cardioTargetLabel(exercise) || 'as you feel'}</p>
+                    <p className={viewOnly ? 'text-sm font-800 nums' : 'text-[11px]'} style={viewOnly ? undefined : { color: MUTED }}>Target {cardioTargetLabel(exercise) || 'as you feel'}</p>
+                    {viewOnly && value.kcal !== '' && exercise.target_kcal == null && (
+                      <p className="text-[11px] nums" style={{ color: MUTED }}>≈ {value.kcal} kcal est.</p>
+                    )}
+                    {!viewOnly && <>
                     <label className="block text-[10px] font-800 uppercase" style={{ color: MUTED }}>
                       Type
                       <input
@@ -586,11 +638,12 @@ export default function PlanLogSheet({
                         )}
                       </div>
                     )}
+                    </>}
                   </div>
                 </section>
               );
             })}
-            {!readOnly && (
+            {!readOnly && !viewOnly && (
               <button type="button" onClick={openPicker} className="w-full min-h-11 text-sm font-800" style={{ border: `2px solid ${INK}` }}>
                 Add exercise
               </button>
@@ -618,7 +671,14 @@ export default function PlanLogSheet({
               </div>
             )}
           </div>
-          {!readOnly && (
+          {viewOnly && (
+            <div className="px-4 pt-3" style={{ borderTop: `2px solid ${INK}`, paddingBottom: 'max(0.75rem, var(--sab))' }}>
+              <button type="button" onClick={start} className="w-full min-h-11 text-sm font-800" style={{ background: ACCENT, color: GROUND, border: `2px solid ${INK}` }}>
+                Start workout
+              </button>
+            </div>
+          )}
+          {!readOnly && !viewOnly && (
             <div className="flex gap-2 px-4 pt-3" style={{ borderTop: `2px solid ${INK}`, paddingBottom: 'max(0.75rem, var(--sab))' }}>
               {session && (
                 <button type="button" onClick={discard} className="min-h-11 px-3 text-sm font-800" style={{ border: `2px solid ${INK}`, color: ACCENT_DEEP }}>

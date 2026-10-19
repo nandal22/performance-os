@@ -52,4 +52,14 @@ describe('TodayPlanCard', () => {
     expect(screen.getByText(/2 exercises \+ 1 cardio/)).toBeTruthy();
     expect(screen.getByTestId('plan-kcal').textContent).toMatch(/^≈ \d+ kcal est\.$/);
   });
+
+  it('offers a read-only View next to Start', async () => {
+    const onView = vi.fn();
+    const onStart = vi.fn();
+    const user = userEvent.setup();
+    render(<TodayPlanCard plan={plan} onStart={onStart} onView={onView} onBrowse={() => undefined} />);
+    await user.click(screen.getByRole('button', { name: 'View' }));
+    expect(onView).toHaveBeenCalledOnce();
+    expect(onStart).not.toHaveBeenCalled();
+  });
 });

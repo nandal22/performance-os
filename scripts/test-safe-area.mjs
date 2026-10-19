@@ -311,6 +311,15 @@ try {
   const cardioLast = await evalIn(page, `(() => { const cardio = document.querySelector('[data-testid="plan-cardio"]'); const groups = cardio ? [...cardio.parentElement.querySelectorAll(':scope > section')] : []; return groups.length + ':' + (groups[groups.length - 1]?.dataset.testid ?? ''); })()`);
   record('plan cardio item is listed last', /^[2-9]\d*:plan-cardio$/.test(cardioLast), cardioLast);
 
+  await gotoReady(page, `${BASE}/__shot?shot=plan-view`, '[data-testid="sheet-header"]');
+  await evalIn(page, paintStatusBar(TOP));
+  await delay(150);
+  const planView = await shot(page, 'plan-view.png');
+  const viewState = await evalIn(page, `JSON.stringify({ header: document.querySelector('[data-testid="sheet-header"]')?.textContent ?? '', inputs: document.querySelectorAll('[data-testid="sheet-header"] ~ div input').length, start: [...document.querySelectorAll('button')].filter(b => b.textContent.trim() === 'Start workout').length, rows: document.querySelectorAll('[data-testid="plan-view-set"]').length, outbox: localStorage.getItem('perf-os-outbox') })`);
+  const view = JSON.parse(viewState);
+  record('plan view-only shows targets with no inputs and one Start button', /view only/i.test(view.header) && view.inputs === 0 && view.start === 1 && view.rows > 0, viewState);
+  record('plan view-only queues no writes', !view.outbox || view.outbox === '[]', String(view.outbox));
+
   await gotoReady(page, `${BASE}/__shot?shot=plan-resumed`, '[data-testid="sheet-header"]');
   await evalIn(page, paintStatusBar(TOP));
   await delay(150);
@@ -323,7 +332,7 @@ try {
   await delay(100);
   const planActual = await shot(page, 'plan-actual.png');
 
-  console.log(`      plan screenshots ${planCard} ${planLog} ${planLogDb} ${planLogCardio} ${planResumed} ${planActual}`);
+  console.log(`      plan screenshots ${planCard} ${planLog} ${planLogDb} ${planLogCardio} ${planResumed} ${planView} ${planActual}`);
   console.log(`      progress first content ${progressMs}ms on throttled 4G at 390x844`);
   console.log(`      screenshots ${beforeProgress} ${afterProgressFile} ${beforeDetail} ${afterDetailFile}`);
   console.log(`      resources ${JSON.stringify(resources)}`);

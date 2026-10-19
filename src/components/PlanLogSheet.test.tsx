@@ -136,7 +136,12 @@ const sorted = { ...plan, exercises: [plan.exercises[1], plan.exercises[2], plan
 
 const settle = () => act(async () => { await syncQueue.flush(); });
 
+// Taps further apart than the double-tap window.
+let clock = 1_000_000;
+const later = () => { clock += 1000; };
+
 beforeEach(() => {
+  vi.spyOn(Date, 'now').mockImplementation(() => clock);
   localStorage.clear();
   online.value = true;
   remote.session = null;
@@ -149,7 +154,10 @@ beforeEach(() => {
   state.failNext = 0;
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('PlanLogSheet sessions', () => {
   it('Start creates the activity and marks the plan in progress right away', async () => {
@@ -177,12 +185,15 @@ describe('PlanLogSheet sessions', () => {
 
     await user.clear(reps);
     await user.type(reps, '9');
+    later();
     await user.click(screen.getByRole('button', { name: 'Update set 1' }));
     await settle();
     expect(sets()).toHaveLength(1);
     expect(sets()[0].reps).toBe(9);
 
-    await user.click(screen.getByRole('button', { name: 'Delete Bench Press set 1' }));
+    await user.clear(reps);
+    await user.type(reps, '7');
+    await user.click(screen.getByRole('button', { name: 'Undo Bench Press set 1' }));
     await settle();
     expect(sets()).toHaveLength(0);
     expect(screen.getAllByRole('button', { name: 'Log set 1' })).toHaveLength(2);
@@ -196,7 +207,7 @@ describe('PlanLogSheet sessions', () => {
     first.unmount();
 
     render(<PlanLogSheet plan={{ ...sorted, status: 'in_progress', activity_id: 'plan-1' }} onClose={() => undefined} onSaved={() => undefined} />);
-    expect(screen.getByRole('button', { name: 'Logged set 1' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Logged set 1, tap to undo' })).toBeTruthy();
     expect(screen.getByText(/2026-10-19 · in progress/)).toBeTruthy();
     await settle();
     expect(server.current!.state.sets.size).toBe(1);
@@ -210,7 +221,7 @@ describe('PlanLogSheet sessions', () => {
       cardio: [], skipped: [], extras: [],
     };
     render(<PlanLogSheet plan={{ ...sorted, status: 'in_progress', activity_id: 'plan-1' }} onClose={() => undefined} onSaved={() => undefined} />);
-    expect(await screen.findByRole('button', { name: 'Logged set 1' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Logged set 1, tap to undo' })).toBeTruthy();
     expect((screen.getByRole('textbox', { name: 'Bench Press set 1 weight' }) as HTMLInputElement).value).toBe('42.5');
     expect(JSON.parse(localStorage.getItem(sessionStorageKey('plan-1')) ?? '{}').sets).toHaveLength(1);
   });
@@ -285,5 +296,137 @@ describe('PlanLogSheet sessions', () => {
     expect(server.current!.state.plans.get('plan-1')?.status).toBe('done');
     expect(localStorage.getItem(sessionStorageKey('plan-1'))).toBeNull();
     expect(onSaved).toHaveBeenCalledOnce();
+  });
+
+  it('tapping Log set again undoes it, keeps the prefill, and survives a reload', async () => {
+    const user = userEvent.setup();
+    const first = render(<PlanLogSheet plan={sorted} autoStart onClose={() => undefined} onSaved={() => undefined} />);
+    const log = () => screen.getAllByRole('button', { name: /^(Log|Logged) set 1/ })[0];
+    await user.click(log());
+    await settle();
+    expect(server.current!.state.sets.size).toBe(1);
+    expect(log().getAttribute('aria-pressed')).toBe('true');
+    expect(log().textContent).toContain('undo');
+
+    later();
+    await user.click(log());
+    await settle();
+    expect(server.current!.state.sets.size).toBe(0);
+    expect(log().getAttribute('aria-pressed')).toBe('false');
+    expect(log().textContent).toBe('Log set 1');
+    expect((screen.getByRole('textbox', { name: 'Bench Press set 1 reps' }) as HTMLInputElement).value).toBe('10');
+    expect((screen.getByRole('textbox', { name: 'Bench Press set 1 weight' }) as HTMLInputElement).value).toBe('40');
+    first.unmount();
+
+    render(<PlanLogSheet plan={{ ...sorted, status: 'in_progress', activity_id: 'plan-1' }} onClose={() => undefined} onSaved={() => undefined} />);
+    expect(screen.getAllByRole('button', { name: 'Log set 1' })).toHaveLength(2);
+    later();
+    await user.click(screen.getAllByRole('button', { name: 'Log set 1' })[0]);
+    await settle();
+    expect([...server.current!.state.sets.values()].map(set => set.plan_set_id)).toEqual(['ps-1']);
+  });
+
+  it('undoes a set logged before a reload, with no orphan row left on the server', async () => {
+    const user = userEvent.setup();
+    const first = render(<PlanLogSheet plan={sorted} autoStart onClose={() => undefined} onSaved={() => undefined} />);
+    const bench = screen.getAllByRole('button', { name: 'Log set 1' })[0];
+    // A double tap logs once; it does not log and then undo.
+    await user.click(bench);
+    await user.click(bench);
+    await settle();
+    expect(server.current!.state.sets.size).toBe(1);
+    first.unmount();
+
+    render(<PlanLogSheet plan={{ ...sorted, status: 'in_progress', activity_id: 'plan-1' }} onClose={() => undefined} onSaved={() => undefined} />);
+    later();
+    await user.click(screen.getByRole('button', { name: 'Logged set 1, tap to undo' }));
+    await settle();
+    expect(server.current!.state.sets.size).toBe(0);
+    expect(JSON.parse(localStorage.getItem(sessionStorageKey('plan-1')) ?? '{}').sets).toEqual([]);
+    later();
+    await user.click(screen.getAllByRole('button', { name: 'Log set 1' })[0]);
+    later();
+    await user.click(screen.getByRole('button', { name: 'Logged set 1, tap to undo' }));
+    later();
+    await user.click(screen.getAllByRole('button', { name: 'Log set 1' })[0]);
+    await settle();
+    expect([...server.current!.state.sets.values()].map(set => set.plan_set_id)).toEqual(['ps-1']);
+  });
+
+  it('undoes an offline log without ever writing the row', async () => {
+    const user = userEvent.setup();
+    online.value = false;
+    render(<PlanLogSheet plan={sorted} autoStart onClose={() => undefined} onSaved={() => undefined} />);
+    await user.click(screen.getAllByRole('button', { name: 'Log set 1' })[0]);
+    later();
+    await user.click(screen.getByRole('button', { name: 'Logged set 1, tap to undo' }));
+    online.value = true;
+    await settle();
+    expect(server.current!.state.sets.size).toBe(0);
+    expect(server.current!.state.calls.filter(call => call === 'upsertSet')).toEqual([]);
+  });
+
+  it('tapping Skip set again undoes the skip, and the state survives a reload', async () => {
+    const user = userEvent.setup();
+    const first = render(<PlanLogSheet plan={sorted} autoStart onClose={() => undefined} onSaved={() => undefined} />);
+    await user.click(screen.getAllByRole('button', { name: 'Skip set 1' })[0]);
+    const skipped = screen.getByRole('button', { name: 'Skipped set 1, tap to undo' });
+    expect(skipped.getAttribute('aria-pressed')).toBe('true');
+    expect(skipped.textContent).toBe('✓ Skipped · undo');
+    expect(document.querySelector('[data-testid="plan-set-row"]')?.getAttribute('data-state')).toBe('skipped');
+    expect((screen.getAllByRole('button', { name: 'Log set 1' })[0] as HTMLButtonElement).disabled).toBe(true);
+    first.unmount();
+
+    render(<PlanLogSheet plan={{ ...sorted, status: 'in_progress', activity_id: 'plan-1' }} onClose={() => undefined} onSaved={() => undefined} />);
+    later();
+    await user.click(screen.getByRole('button', { name: 'Skipped set 1, tap to undo' }));
+    expect(screen.getAllByRole('button', { name: 'Skip set 1' })).toHaveLength(2);
+    expect(document.querySelector('[data-testid="plan-set-row"]')?.getAttribute('data-state')).toBe('pending');
+    expect(JSON.parse(localStorage.getItem(sessionStorageKey('plan-1')) ?? '{}').skipped).toEqual([]);
+    await settle();
+    expect(server.current!.state.sets.size).toBe(0);
+  });
+});
+
+describe('PlanLogSheet view only', () => {
+  it('opens a planned workout read-only: no activity, status stays planned, nothing queued', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<PlanLogSheet plan={sorted} onClose={onClose} onSaved={() => undefined} />);
+    await settle();
+    expect(screen.getByText(/2026-10-19 · view only/)).toBeTruthy();
+    expect(screen.queryAllByRole('textbox')).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: /Log set|Skip set|Finish workout|Add set|Add exercise/ })).toBeNull();
+    const text = document.body.textContent ?? '';
+    expect(text).toContain('8–10 reps · 40 kg');
+    expect(text).toContain('Rest 60s');
+    expect(text).toContain('8–10 reps · 12.5 kg / DB');
+    expect(text).toContain('log 25 kg pair');
+    expect(text).toContain('Target 20 min · 10% incline · 5.5 km/h · 180 kcal');
+    await waitFor(() => expect(screen.getByTestId('plan-calories').textContent).toMatch(/\d+ kcal/));
+    expect(screen.getAllByTestId('plan-view-set')).toHaveLength(2);
+    expect(screen.queryByTestId('sync-status')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Guidance for Incline Dumbbell Press' }));
+    await user.click(screen.getByRole('button', { name: 'Close workout' }));
+    await settle();
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(server.current!.state.calls).toEqual([]);
+    expect(server.current!.state.activities.size).toBe(0);
+    expect(server.current!.state.plans.get('plan-1')).toBeUndefined();
+    expect(localStorage.getItem(sessionStorageKey('plan-1'))).toBeNull();
+    expect(localStorage.getItem('perf-os-outbox') ?? '[]').toBe('[]');
+  });
+
+  it('starts from view only with one tap', async () => {
+    const user = userEvent.setup();
+    render(<PlanLogSheet plan={sorted} onClose={() => undefined} onSaved={() => undefined} />);
+    await user.click(screen.getByRole('button', { name: 'Start workout' }));
+    await settle();
+    expect(server.current!.state.activities.get('plan-1')?.status).toBe('in_progress');
+    expect(server.current!.state.plans.get('plan-1')).toEqual({ status: 'in_progress', activity_id: 'plan-1' });
+    expect(screen.getByText(/2026-10-19 · in progress/)).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Log set 1' })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Start workout' })).toBeNull();
   });
 });

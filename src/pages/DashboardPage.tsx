@@ -187,6 +187,7 @@ export default function DashboardPage() {
             plan={featured}
             bodyWeightKg={latestWeight?.weight ?? null}
             onStart={() => { void openPlan(featured, true); }}
+            onView={() => { void openPlan(featured, false); }}
             onBrowse={() => setShowPlans(true)}
           />
         )}
