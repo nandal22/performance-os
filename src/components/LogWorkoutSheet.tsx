@@ -676,12 +676,14 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-end">
+      <div className="sheet-overlay z-50">
+        <div className="sheet-safe-bar" aria-hidden="true" />
+        <div className="sheet-stage">
         <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
         <div
-          className="relative flex w-full max-h-[100dvh] flex-col overflow-hidden max-w-lg mx-auto"
-          style={{ background: GROUND, color: INK, border: `2px solid ${INK}`, boxShadow: '0 12px 32px rgba(45,43,43,0.25)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          className="sheet-panel relative max-w-lg mx-auto"
+          style={{ background: GROUND, color: INK, border: `2px solid ${INK}`, boxShadow: '0 12px 32px rgba(45,43,43,0.25)' }}
         >
           {/* Handle */}
           <div className="flex-shrink-0 flex justify-center pt-3 pb-1">
@@ -1295,7 +1297,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
           </div>
 
           {/* Footer */}
-          <div className="flex-shrink-0 px-4 pt-3" style={{ borderTop: `2px solid ${INK}`, paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}>
+          <div className="flex-shrink-0 px-4 pt-3" style={{ borderTop: `2px solid ${INK}`, paddingBottom: 'max(0.75rem, var(--sab))' }}>
             <button
               onClick={handleFinish}
               disabled={saving}
@@ -1307,6 +1309,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, autoResume =
                 : `Finish Workout${loggedSets.length > 0 ? ` · ${loggedSets.length} sets` : ''}`}
             </button>
           </div>
+        </div>
         </div>
       </div>
 

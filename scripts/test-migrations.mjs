@@ -2,6 +2,7 @@
 // Applies supabase/migrations to a throwaway local database and prints pass/fail per case.
 // Never connects to the hosted Supabase project.
 
+import { gzipSync } from 'node:zlib';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -201,6 +202,7 @@ try {
       'get_training_load(integer)',
       'rls_auto_enable()',
       'save_workout(date,text,text,integer,text,text[],jsonb,jsonb,jsonb,jsonb)',
+      'get_progress_cards()',
     ];
     for (const name of names) {
       const allowed = psql(`SELECT has_function_privilege('anon', 'public.${name}', 'EXECUTE')`);
@@ -213,7 +215,7 @@ try {
       FROM pg_proc p
       JOIN pg_namespace n ON n.oid = p.pronamespace
       WHERE n.nspname = 'public'
-        AND p.proname IN ('get_exercise_summaries', 'get_personal_records', 'get_training_load', 'save_workout')
+        AND p.proname IN ('get_exercise_summaries', 'get_personal_records', 'get_training_load', 'save_workout', 'get_progress_cards')
         AND NOT ('search_path=public' = ANY (COALESCE(p.proconfig, ARRAY[]::text[])))
     `);
     assert(missing === '', missing || 'none');
@@ -236,6 +238,71 @@ try {
     const visible = psql(`BEGIN; SET LOCAL ROLE authenticated; SELECT count(*) FROM activities; ROLLBACK;`);
     assert(hidden === '0', `hidden ${hidden}`);
     assert(Number(visible) > 0, `visible ${visible}`);
+  });
+  record('get_progress_cards returns compact main-lift cards', () => {
+    psql(`GRANT SELECT ON activities, strength_sets, exercises TO authenticated`);
+    psql(`INSERT INTO auth.users (id) VALUES ('${otherId}') ON CONFLICT DO NOTHING`);
+    psql(`
+      INSERT INTO activities (id, user_id, date, type)
+      SELECT ('bbbbbbbb-bbbb-bbbb-bbbb-' || lpad(g::text, 12, '0'))::uuid,
+             '${ownerId}', DATE '2026-01-01' + g, 'gym'
+      FROM generate_series(1, 12) AS g;
+      INSERT INTO strength_sets (activity_id, exercise_id, set_number, reps, weight)
+      SELECT ('bbbbbbbb-bbbb-bbbb-bbbb-' || lpad(g::text, 12, '0'))::uuid,
+             (SELECT id FROM exercises WHERE name = 'Bench Press' AND user_id IS NULL LIMIT 1),
+             s, 5, 40 + g
+      FROM generate_series(1, 12) AS g
+      CROSS JOIN generate_series(1, 4) AS s;
+      INSERT INTO activities (id, user_id, date, type)
+      VALUES ('cccccccc-cccc-cccc-cccc-cccccccccccc', '${otherId}', '2026-02-01', 'gym');
+      INSERT INTO strength_sets (activity_id, exercise_id, set_number, reps, weight)
+      SELECT 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+             (SELECT id FROM exercises WHERE name = 'Bench Press' AND user_id IS NULL LIMIT 1),
+             1, 1, 250;
+      INSERT INTO strength_sets (activity_id, exercise_id, set_number, reps, weight)
+      SELECT 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
+             (SELECT id FROM exercises WHERE name = 'Lateral Raise' AND user_id IS NULL LIMIT 1),
+             9, 12, 10;
+      WITH days AS (
+        INSERT INTO activities (user_id, date, type)
+        SELECT '${ownerId}', DATE '2024-01-01' + g, 'gym'
+        FROM generate_series(0, 199) AS g
+        RETURNING id
+      )
+      INSERT INTO strength_sets (activity_id, exercise_id, set_number, reps, weight)
+      SELECT id,
+             (SELECT id FROM exercises WHERE name = 'Squat' AND user_id IS NULL LIMIT 1),
+             s, 5, 100
+      FROM days
+      CROSS JOIN generate_series(1, 6) AS s;
+    `);
+    const rawBytes = Number(psql(`
+      SELECT octet_length(jsonb_agg(to_jsonb(ss) || jsonb_build_object('date', a.date))::text)
+      FROM strength_sets ss
+      JOIN activities a ON a.id = ss.activity_id
+      WHERE a.user_id = '${ownerId}'
+    `));
+    const payload = psql(`BEGIN; SET LOCAL ROLE authenticated; SELECT get_progress_cards()::text; ROLLBACK;`);
+    const cards = JSON.parse(payload);
+    const bench = cards.find(card => card.exercise_name === 'Bench Press');
+    assert(bench, 'bench card missing');
+    assert(Number(bench.pr_weight) === 100, `pr ${bench.pr_weight}`);
+    assert(Math.max(...bench.sparkline.map(point => Number(point.weight))) === 52, 'sparkline included the older heavier session');
+    assert(bench.last_date === '2026-01-13', bench.last_date);
+    assert(bench.last_sets.length === 4, `last sets ${bench.last_sets.length}`);
+    assert(bench.sparkline.length === 8, `sparkline ${bench.sparkline.length}`);
+    assert(bench.previous_max === 51, `previous ${bench.previous_max}`);
+    assert(!cards.some(card => card.exercise_name === 'Lateral Raise'), 'non main lift included');
+    assert(!payload.includes('250'), 'other user weight leaked');
+    const cardBytes = Buffer.byteLength(payload);
+    const rawText = psql(`
+      SELECT jsonb_agg(to_jsonb(ss) || jsonb_build_object('date', a.date))::text
+      FROM strength_sets ss
+      JOIN activities a ON a.id = ss.activity_id
+      WHERE a.user_id = '${ownerId}'
+    `);
+    console.log(`      progress payload ${cardBytes} bytes (${gzipSync(payload).length} gzip), raw owner sets ${rawBytes} bytes (${gzipSync(rawText).length} gzip)`);
+    assert(cardBytes < rawBytes, `card payload ${cardBytes} is not smaller than raw ${rawBytes}`);
   });
 } finally {
   try {

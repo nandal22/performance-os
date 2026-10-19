@@ -9,6 +9,7 @@ interface Props {
   activityId: string | null;
   onClose: () => void;
   onDeleted: () => void;
+  preview?: ActivityWithSets | null;
 }
 
 interface GuidedMetrics {
@@ -80,13 +81,14 @@ const CARDIO_METHOD_LABELS: Record<CardioMethod, string> = {
   cult_hrx: 'Cult HRX',
 };
 
-export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: Props) {
-  const [activity, setActivity] = useState<ActivityWithSets | null>(null);
+export default function WorkoutDetailSheet({ activityId, onClose, onDeleted, preview = null }: Props) {
+  const [activity, setActivity] = useState<ActivityWithSets | null>(preview);
   const [loading, setLoading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
+    if (preview) { setActivity(preview); return; }
     if (!activityId) { setActivity(null); return; }
     setLoading(true);
     setConfirmDelete(false);
@@ -94,7 +96,7 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
       .then(setActivity)
       .catch(() => toast.error('Failed to load workout'))
       .finally(() => setLoading(false));
-  }, [activityId]);
+  }, [activityId, preview]);
 
   if (!activityId) return null;
 
@@ -146,12 +148,14 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end">
+    <div className="sheet-overlay z-50" data-testid="workout-sheet">
+      <div className="sheet-safe-bar" aria-hidden="true" />
+      <div className="sheet-stage">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
       <div
-        className="relative w-full max-h-[100dvh] flex flex-col overflow-hidden max-w-lg mx-auto"
-        style={{ background: GROUND, color: INK, border: `2px solid ${INK}`, boxShadow: '0 12px 32px rgba(45,43,43,0.25)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        className="sheet-panel relative max-w-lg mx-auto"
+        style={{ background: GROUND, color: INK, border: `2px solid ${INK}`, boxShadow: '0 12px 32px rgba(45,43,43,0.25)', paddingBottom: 'var(--sab)' }}
       >
         {/* Handle */}
         <div className="flex-shrink-0 flex justify-center pt-3 pb-1">
@@ -159,7 +163,7 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
         </div>
 
         {/* Header */}
-        <div className="flex-shrink-0 flex items-center justify-between px-4 pt-2 pb-3" style={{ borderBottom: `2px solid ${INK}` }}>
+        <div data-testid="sheet-header" className="flex-shrink-0 flex items-center justify-between px-4 pt-2 pb-3" style={{ borderBottom: `2px solid ${INK}` }}>
           <div className="flex items-center gap-2.5">
             {loading && <p className="text-sm" style={{ color: MUTED }}>Loading…</p>}
             {activity && (
@@ -179,7 +183,7 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
               </>
             )}
           </div>
-          <button onClick={onClose} className="min-h-11 min-w-11 inline-flex items-center justify-center" style={{ color: MUTED }}>
+          <button data-testid="sheet-close" aria-label="Close workout" onClick={onClose} className="min-h-11 min-w-11 inline-flex items-center justify-center" style={{ color: MUTED }}>
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -367,6 +371,7 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted }: P
             </>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

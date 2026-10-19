@@ -1,16 +1,18 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Search, Trophy, TrendingUp, ChevronRight, Dumbbell } from 'lucide-react';
-import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { toast } from 'sonner';
 import { exercisesService } from '@/services/exercises';
 import { strengthSetsService } from '@/services/strengthSets';
 import ExerciseProgressCard from '@/components/ExerciseProgressCard';
-import ExerciseProgressSheet from '@/components/ExerciseProgressSheet';
+import { loadProgressCards, peekProgressCards, type ProgressCard } from '@/services/progressCards';
+import type { Exercise, StrengthSet } from '@/types';
 
 const LogWorkoutSheet = lazy(() => import('@/components/LogWorkoutSheet'));
-import type { Exercise, StrengthSet } from '@/types';
+const ExerciseProgressSheet = lazy(() => import('@/components/ExerciseProgressSheet'));
+const WeightSparkline = lazy(() => import('@/components/WeightSparkline'));
+const MaxWeightTrend = lazy(() => import('@/components/WeightSparkline').then(module => ({ default: module.MaxWeightTrend })));
 
 const MODERNIST = {
   ground: '#f3f2f2',
@@ -22,20 +24,6 @@ const MODERNIST = {
   muted: 'rgba(32,30,29,0.55)',
   rule: 'rgba(32,30,29,0.15)',
 };
-
-const MAIN_LIFTS = [
-  'Bench Press',
-  'Squat',
-  'Deadlift',
-  'Overhead Press',
-  'Dumbbell Overhead Press',
-  'Barbell Row',
-  'Romanian Deadlift',
-  'Incline Bench Press',
-  'Pull-up',
-  'Leg Press',
-  'Hip Thrust',
-];
 
 interface SetRecord {
   weight: number;
@@ -56,18 +44,10 @@ interface PR {
   reps: number;
 }
 
-interface MainLiftCard {
-  exercise: Exercise;
-  sessions: SessionStat[];
-  pr: PR | null;
-  last: SessionStat | null;
-  previous: SessionStat | null;
-}
-
 type StrengthSetWithActivity = StrengthSet & { activity?: { date?: string } | null };
 
-function normalize(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+function lastMax(card: ProgressCard) {
+  return card.last_sets.reduce((max, set) => Math.max(max, Number(set.weight) || 0), 0);
 }
 
 function buildSessions(rawSets: StrengthSet[]): SessionStat[] {
@@ -124,40 +104,101 @@ function bestWeightFromSessions(sessions: SessionStat[]): PR | null {
   return best;
 }
 
-function trendLabel(card: MainLiftCard) {
-  if (!card.last || !card.previous) return 'First logged';
-  const diff = card.last.maxWeight - card.previous.maxWeight;
+function trendLabel(card: ProgressCard) {
+  if (card.previous_max == null || card.last_sets.length === 0) return 'First logged';
+  const diff = lastMax(card) - Number(card.previous_max);
   if (diff > 0) return `+${diff} kg vs last`;
   if (diff < 0) return `${diff} kg vs last`;
   return 'Same as last';
 }
 
-function sessionSetText(session: SessionStat | null) {
-  if (!session) return 'No sets yet';
-  return session.sets
+function sessionSetText(sets: ProgressCard['last_sets']) {
+  if (sets.length === 0) return 'No sets yet';
+  return sets
     .map(set => `${set.weight > 0 ? set.weight : 'BW'}x${set.reps}`)
     .join('  ');
 }
 
-export default function ProgressPage() {
+function InViewSparkline({ data }: { data: ProgressCard['sparkline'] }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [show, setShow] = useState(() => typeof IntersectionObserver === 'undefined');
+
+  useEffect(() => {
+    if (show || data.length < 2) return;
+    const node = ref.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) setShow(true);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [data.length, show]);
+
+  if (data.length < 2) return null;
+  return (
+    <div ref={ref} className="h-10 min-w-0 mt-2">
+      {show && (
+        <Suspense fallback={null}>
+          <WeightSparkline data={data} />
+        </Suspense>
+      )}
+    </div>
+  );
+}
+
+function BelowFold({ index, children }: { index: number; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [show, setShow] = useState(index < 3 || typeof IntersectionObserver === 'undefined');
+
+  useEffect(() => {
+    if (show) return;
+    const node = ref.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) setShow(true);
+    }, { rootMargin: '240px' });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [show]);
+
+  return (
+    <div ref={ref} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 220px' }}>
+      {show ? children : <div className="h-52" style={{ border: `2px solid ${MODERNIST.ink}22` }} />}
+    </div>
+  );
+}
+
+export default function ProgressPage({ previewCards }: { previewCards?: ProgressCard[] }) {
+  const initialCards = previewCards ?? peekProgressCards();
   const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [mainCards, setMainCards] = useState<MainLiftCard[]>([]);
+  const [mainCards, setMainCards] = useState<ProgressCard[]>(initialCards ?? []);
   const [selectedEx, setSelectedEx] = useState<Exercise | null>(null);
   const [sessions, setSessions] = useState<SessionStat[]>([]);
   const [pr, setPR] = useState<PR | null>(null);
   const [search, setSearch] = useState('');
-  const [loadingExercises, setLoadingExercises] = useState(true);
-  const [loadingCards, setLoadingCards] = useState(true);
+  const [loadingCards, setLoadingCards] = useState(initialCards == null);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [historyExercise, setHistoryExercise] = useState<Exercise | null>(null);
+  const [historyExercise, setHistoryExercise] = useState<{ id: string; name: string } | null>(null);
   const [logSheetOpen, setLogSheetOpen] = useState(false);
 
   useEffect(() => {
+    if (previewCards) return;
+    let cancelled = false;
+    loadProgressCards()
+      .then(cards => { if (!cancelled) setMainCards(cards); })
+      .catch(() => { if (!cancelled) toast.error('Failed to load main lifts'); })
+      .finally(() => { if (!cancelled) setLoadingCards(false); });
+    return () => { cancelled = true; };
+  }, [previewCards]);
+
+  useEffect(() => {
+    if (!search.trim()) return;
+    let cancelled = false;
     exercisesService.getAll()
-      .then(setExercises)
-      .catch(() => toast.error('Failed to load exercises'))
-      .finally(() => setLoadingExercises(false));
-  }, []);
+      .then(rows => { if (!cancelled) setExercises(rows); })
+      .catch(() => { if (!cancelled) toast.error('Failed to load exercises'); });
+    return () => { cancelled = true; };
+  }, [search]);
 
   const loadExerciseData = useCallback(async (exercise: Exercise) => {
     setLoadingDetail(true);
@@ -182,50 +223,6 @@ export default function ProgressPage() {
     void loadExerciseData(selectedEx);
   }, [selectedEx, loadExerciseData]);
 
-  useEffect(() => {
-    if (exercises.length === 0) {
-      setMainCards([]);
-      setLoadingCards(false);
-      return;
-    }
-
-    const loadMainLifts = async () => {
-      setLoadingCards(true);
-      try {
-        const matched = MAIN_LIFTS
-          .map(name => exercises.find(ex => normalize(ex.name) === normalize(name)))
-          .filter((exercise): exercise is Exercise => Boolean(exercise));
-
-        const rawSets = await strengthSetsService.getByExercises(matched.map(exercise => exercise.id), 2000);
-        const setsByExercise = new Map<string, StrengthSet[]>();
-        for (const set of rawSets) {
-          const group = setsByExercise.get(set.exercise_id) ?? [];
-          group.push(set);
-          setsByExercise.set(set.exercise_id, group);
-        }
-        const cards = matched.map(exercise => {
-          const liftSets = (setsByExercise.get(exercise.id) ?? []).filter(set => (set.weight ?? 0) > 0);
-          const liftSessions = buildSessions(liftSets);
-          return {
-            exercise,
-            sessions: liftSessions,
-            pr: bestWeightFromSessions(liftSessions) ?? bestFromSets(liftSets),
-            last: liftSessions.length ? liftSessions[liftSessions.length - 1] : null,
-            previous: liftSessions.length > 1 ? liftSessions[liftSessions.length - 2] : null,
-          };
-        });
-
-        setMainCards(cards);
-      } catch {
-        toast.error('Failed to load main lifts');
-      } finally {
-        setLoadingCards(false);
-      }
-    };
-
-    void loadMainLifts();
-  }, [exercises]);
-
   const filteredExercises = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return [];
@@ -246,10 +243,11 @@ export default function ProgressPage() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: MODERNIST.ground, color: MODERNIST.ink }}>
       <header
+        data-testid="page-header"
         className="sticky top-0 z-10 px-4 pt-safe pb-4"
         style={{ background: MODERNIST.ground, borderBottom: `2px solid ${MODERNIST.ink}66` }}
       >
-        <p className="text-[10px] font-800 uppercase tracking-[0.1em] mb-0.5" style={{ color: MODERNIST.muted }}>Main lifts</p>
+        <p data-testid="page-eyebrow" className="text-[10px] font-800 uppercase tracking-[0.1em] mb-0.5" style={{ color: MODERNIST.muted }}>Main lifts</p>
         <h1 className="text-base font-800 leading-tight tracking-tight">Progress</h1>
       </header>
 
@@ -260,7 +258,7 @@ export default function ProgressPage() {
             <span className="text-[10px]" style={{ color: MODERNIST.muted }}>{mainCards.length}</span>
           </div>
 
-          {loadingCards || loadingExercises ? (
+          {loadingCards ? (
             <div className="space-y-2">
               {[1, 2, 3].map(item => (
                 <div key={item} className="h-28" style={{ border: `2px solid ${MODERNIST.ink}22` }} />
@@ -273,13 +271,22 @@ export default function ProgressPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {mainCards.map((card) => {
-                const data = card.sessions.slice(-8).map(session => ({ date: session.date, weight: session.maxWeight }));
-                const hasProgress = card.sessions.length > 1;
+              {mainCards.map((card, index) => {
+                const peak = lastMax(card);
+                const hasProgress = card.previous_max != null && card.last_sets.length > 0;
+                const exercise = { id: card.exercise_id, name: card.exercise_name };
                 return (
+                  <BelowFold key={card.exercise_id} index={index}>
                   <button
-                    key={card.exercise.id}
-                    onClick={() => setSelectedEx(card.exercise)}
+                    onClick={() => setSelectedEx({
+                      id: card.exercise_id,
+                      name: card.exercise_name,
+                      category: 'other',
+                      primary_muscle: '',
+                      secondary_muscles: [],
+                      is_custom: false,
+                      created_at: '',
+                    })}
                     className="w-full min-h-11 p-3.5 text-left"
                     style={{ border: `2px solid ${MODERNIST.ink}`, background: MODERNIST.panel }}
                   >
@@ -290,9 +297,9 @@ export default function ProgressPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <p className="text-sm font-800 truncate">{card.exercise.name}</p>
+                            <p className="text-sm font-800 truncate">{card.exercise_name}</p>
                             <p className="text-[11px] mt-0.5" style={{ color: MODERNIST.muted }}>
-                              {card.last ? format(new Date(card.last.date + 'T12:00:00'), 'MMM d') : 'No sessions'}
+                              {card.last_date ? format(new Date(card.last_date + 'T12:00:00'), 'MMM d') : 'No sessions'}
                             </p>
                           </div>
                           <ChevronRight className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -301,11 +308,11 @@ export default function ProgressPage() {
                         <div className="grid grid-cols-[1fr_auto] gap-3 mt-3 items-end">
                           <div className="min-w-0">
                             <p className="text-[10px] font-800 uppercase tracking-[0.1em]" style={{ color: MODERNIST.muted }}>Last sets</p>
-                            <p className="text-xs truncate nums mt-1">{sessionSetText(card.last)}</p>
+                            <p className="text-xs truncate nums mt-1">{sessionSetText(card.last_sets)}</p>
                             <p
                               className="text-[11px] font-800 mt-1"
                               style={{
-                                color: hasProgress && card.last && card.previous && card.last.maxWeight > card.previous.maxWeight
+                                color: hasProgress && peak > Number(card.previous_max)
                                   ? MODERNIST.accentDeep
                                   : MODERNIST.muted,
                               }}
@@ -317,33 +324,19 @@ export default function ProgressPage() {
                           <div className="text-right">
                             <p className="text-[10px] font-800 uppercase tracking-[0.1em]" style={{ color: MODERNIST.muted }}>Max kg PR</p>
                             <p className="text-lg font-800 nums">
-                              {card.pr ? card.pr.weight : '--'}
+                              {card.pr_weight != null ? card.pr_weight : '--'}
                               <span className="text-[11px] font-600 ml-0.5" style={{ color: MODERNIST.muted }}>kg</span>
                             </p>
-                            {card.pr?.reps ? (
-                              <p className="text-[10px] nums" style={{ color: MODERNIST.muted }}>{card.pr.reps} reps</p>
+                            {card.pr_reps ? (
+                              <p className="text-[10px] nums" style={{ color: MODERNIST.muted }}>{card.pr_reps} reps</p>
                             ) : null}
                           </div>
                         </div>
 
-                        {data.length > 1 && (
-                          <div className="h-10 min-w-0 mt-2">
-                            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                              <LineChart data={data}>
-                                <Line
-                                  type="monotone"
-                                  dataKey="weight"
-                                  stroke={MODERNIST.accent}
-                                  strokeWidth={2}
-                                  dot={false}
-                                />
-                              </LineChart>
-                            </ResponsiveContainer>
-                          </div>
-                        )}
+                        <InViewSparkline data={card.sparkline} />
 
                         <button
-                          onClick={(e) => { e.stopPropagation(); setHistoryExercise(card.exercise); }}
+                          onClick={(e) => { e.stopPropagation(); setHistoryExercise(exercise); }}
                           className="min-h-11 text-[11px] font-800 mt-2"
                           style={{ color: MODERNIST.accentDeep }}
                         >
@@ -352,6 +345,7 @@ export default function ProgressPage() {
                       </div>
                     </div>
                   </button>
+                  </BelowFold>
                 );
               })}
             </div>
@@ -450,17 +444,9 @@ export default function ProgressPage() {
                       <p className="text-[10px] font-800 uppercase tracking-[0.1em] mb-3" style={{ color: MODERNIST.muted }}>
                         Max Weight Trend
                       </p>
-                      <ResponsiveContainer width="100%" height={180} minWidth={0}>
-                        <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-                          <Line
-                            type="monotone"
-                            dataKey="weight"
-                            stroke={MODERNIST.accent}
-                            strokeWidth={2.5}
-                            dot={{ fill: MODERNIST.accent, r: 3, strokeWidth: 0 }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
+                      <Suspense fallback={<div className="h-[180px]" />}>
+                        <MaxWeightTrend data={chartData} />
+                      </Suspense>
                     </div>
                   )}
 
@@ -507,11 +493,15 @@ export default function ProgressPage() {
         </section>
       </main>
 
-      <ExerciseProgressSheet
-        exercise={historyExercise}
-        onClose={() => setHistoryExercise(null)}
-        onLogSet={() => { setHistoryExercise(null); setLogSheetOpen(true); }}
-      />
+      {historyExercise && (
+        <Suspense fallback={null}>
+          <ExerciseProgressSheet
+            exercise={historyExercise}
+            onClose={() => setHistoryExercise(null)}
+            onLogSet={() => { setHistoryExercise(null); setLogSheetOpen(true); }}
+          />
+        </Suspense>
+      )}
       {logSheetOpen && (
         <Suspense fallback={null}>
           <LogWorkoutSheet

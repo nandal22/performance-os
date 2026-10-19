@@ -53,10 +53,57 @@ body {
   font-feature-settings: 'tnum';
 }
 
-/* ── iOS safe area utilities ── */
-.pt-safe  { padding-top:    max(1.5rem, env(safe-area-inset-top, 0px)); }
-.pb-safe  { padding-bottom: env(safe-area-inset-bottom, 0px); }
-.pb-nav   { padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px)); }
+/* ── iOS safe area ──
+   viewport-fit=cover lets env() report the notch. Installed standalone PWAs
+   on iPhone sometimes report a 0 top inset while still drawing the status bar
+   over the page, so standalone mode keeps a 47px / 34px floor (iPhone 13).
+   Tests set --sat / --sab on the document to simulate those insets. */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+}
+
+@media (display-mode: standalone) {
+  :root {
+    --sat: max(47px, env(safe-area-inset-top, 0px));
+    --sab: max(34px, env(safe-area-inset-bottom, 0px));
+  }
+}
+
+.pt-safe { padding-top: max(1.5rem, var(--sat)); }
+.pb-safe { padding-bottom: var(--sab); }
+.pb-nav  { padding-bottom: calc(4.5rem + var(--sab)); }
+
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sheet-safe-bar {
+  flex: none;
+  height: var(--sat);
+  background: #f3f2f2;
+}
+
+.sheet-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.sheet-panel {
+  width: 100%;
+  max-height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 
 /* ── Prevent iOS input zoom (font-size < 16px triggers auto-zoom) ── */
 input[type="text"],
@@ -126,5 +173,5 @@ option {
 
 /* ── Sonner toast: push below iPhone notch ── */
 [data-sonner-toaster][data-y-position="top"] {
-  top: max(16px, env(safe-area-inset-top, 16px)) !important;
+  top: max(16px, var(--sat)) !important;
 }
