@@ -1,3 +1,4 @@
+import { bodyweightLabel } from '@/lib/planMath';
 import { useEffect, useState } from 'react';
 import { X, Trash2, CheckCircle2, CalendarCheck } from 'lucide-react';
 import { format } from 'date-fns';
@@ -323,8 +324,12 @@ export default function WorkoutDetailSheet({ activityId, onClose, onDeleted, pre
                     >
                       <span className="text-xs font-800 w-5 flex-shrink-0" style={{ color: MUTED }}>S{i + 1}</span>
                       <span className="text-sm flex-1 nums">
-                        <span className="font-800">{s.reps}</span> reps
-                        {s.weight != null && s.weight > 0 && (
+                        {s.reps == null && s.duration_sec != null
+                          ? <><span className="font-800">{s.duration_sec}</span> s</>
+                          : <><span className="font-800">{s.reps}</span> reps</>}
+                        {s.added_weight_kg != null ? (
+                          <> × <span className="font-800">{bodyweightLabel(Number(s.added_weight_kg))}</span></>
+                        ) : s.weight != null && s.weight > 0 && (
                           <> × <span className="font-800">{s.weight} kg</span></>
                         )}
                       </span>

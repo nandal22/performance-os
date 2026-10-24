@@ -103,4 +103,59 @@ describe('PlanVsActual', () => {
     expect(text).toContain('Actual 22 min · 195 kcal');
     expect(text).toContain('done');
   });
+
+  it('shows BW + added and timed holds against their targets', () => {
+    render(
+      <PlanVsActual
+        comparison={{
+          day_type: 'Pull',
+          plan_date: '2026-10-24',
+          exercises: [{
+            name: 'Dips',
+            position: 1,
+            load_type: 'bodyweight',
+            cardio: null,
+            sets: [{
+              id: 'd1', set_number: 1, set_type: 'straight',
+              target_reps_min: 6, target_reps_max: 8, target_weight_kg: 15, target_rir_min: null, target_rir_max: null,
+              actual: { reps: 8, weight: 86.4, added_weight_kg: 15, bodyweight_kg: 71.4, rpe: null },
+            }],
+          }, {
+            name: 'Plank',
+            position: 2,
+            load_type: 'bodyweight',
+            measure: 'time',
+            cardio: null,
+            sets: [{
+              id: 'p1', set_number: 1, set_type: 'straight',
+              target_reps_min: null, target_reps_max: null, target_duration_sec_min: 45, target_duration_sec_max: 60,
+              target_weight_kg: null, target_rir_min: null, target_rir_max: null,
+              actual: { reps: null, weight: 71.4, added_weight_kg: 0, bodyweight_kg: 71.4, duration_sec: 52, rpe: null },
+            }],
+          }, {
+            name: 'Farmer Carry',
+            position: 3,
+            load_type: 'per_dumbbell',
+            measure: 'time',
+            cardio: null,
+            sets: [{
+              id: 'f1', set_number: 1, set_type: 'straight',
+              target_reps_min: null, target_reps_max: null, target_duration_sec_min: 40, target_duration_sec_max: 60,
+              target_weight_kg: 24, target_rir_min: null, target_rir_max: null,
+              actual: { reps: null, weight: 48, duration_sec: 30, rpe: null },
+            }],
+          }],
+        }}
+      />,
+    );
+    const text = screen.getByLabelText('Planned versus actual').textContent ?? '';
+    expect(text).toContain('Target 6–8 reps · BW + 15 kg');
+    expect(text).toContain('Actual 8 reps · BW + 15 kg');
+    expect(text).toContain('Target 45–60 s · BW');
+    expect(text).toContain('Actual 52 s · BW');
+    expect(text).toContain('Target 40–60 s · 24 kg / DB');
+    expect(text).toContain('Actual 30 s · 48 kg (24 / DB)');
+    expect(text.match(/hit/g)?.length).toBe(2);
+    expect(text).toContain('miss');
+  });
 });

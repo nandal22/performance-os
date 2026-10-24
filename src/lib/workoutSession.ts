@@ -2,7 +2,7 @@
 // (so a reload resumes it), and the outbox (so every logged set reaches the
 // database as soon as it is logged). Each change writes all three.
 
-import { op, type SyncQueue } from '@/lib/syncQueue';
+import { op, type SetRow, type SyncQueue } from '@/lib/syncQueue';
 
 export type LoadMode = 'total' | 'dumbbell_pair' | 'barbell_plates' | 'bodyweight';
 
@@ -11,10 +11,16 @@ export interface SessionSet {
   exercise_id: string;
   exercise_name: string;
   set_number: number;
-  reps: number;
+  /** Null for a timed set (duration_sec holds its seconds). */
+  reps: number | null;
+  /** The total load: body weight + added for bodyweight sets, the pair for dumbbells. */
   weight: number | null;
   rpe: number | null;
   plan_set_id: string | null;
+  /** Load added on top of body weight (0 = BW only). Set for bodyweight exercises. */
+  added_weight_kg?: number | null;
+  /** Seconds held or carried. Set for timed exercises. */
+  duration_sec?: number | null;
   load_mode?: LoadMode;
   input_weight?: number;
   bar_weight?: number;
@@ -89,8 +95,12 @@ export function clearSession(planId: string | null, storage: Storage = localStor
   storage.removeItem(sessionStorageKey(planId));
 }
 
-export function setRow(session: WorkoutSession, set: SessionSet) {
-  return {
+/**
+ * The strength_sets row for a set. The bodyweight split and seconds are only sent when the
+ * set carries them, so rows from sessions started before they existed stay the same shape.
+ */
+export function setRow(session: WorkoutSession, set: SessionSet): SetRow {
+  const row: SetRow = {
     id: set.id,
     activity_id: session.activityId,
     exercise_id: set.exercise_id,
@@ -100,6 +110,12 @@ export function setRow(session: WorkoutSession, set: SessionSet) {
     rpe: set.rpe,
     plan_set_id: set.plan_set_id,
   };
+  if (set.added_weight_kg !== undefined) {
+    row.added_weight_kg = set.added_weight_kg;
+    row.bodyweight_kg = set.bodyweight_kg ?? null;
+  }
+  if (set.duration_sec !== undefined) row.duration_sec = set.duration_sec;
+  return row;
 }
 
 function cardioRow(session: WorkoutSession, entry: SessionCardio) {

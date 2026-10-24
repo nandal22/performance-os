@@ -12,6 +12,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dbName = `perfos_test_${process.pid}`;
 const ownerId = '11111111-1111-1111-1111-111111111111';
 const otherId = '22222222-2222-2222-2222-222222222222';
+const thirdId = '33333333-3333-3333-3333-333333333333';
 const results = [];
 
 function psql(sql, database = dbName) {
@@ -137,6 +138,103 @@ SELECT
 FROM test_snapshot_018
 `;
 
+// Rows that exist before 019, shaped like production: custom bodyweight moves with no
+// equipment, BW typed into the weight field, plank seconds typed into reps, a farmer carry
+// logged as one trip, and a coach plan whose bodyweight targets include body weight.
+const seed019 = `
+INSERT INTO auth.users (id) VALUES ('${thirdId}') ON CONFLICT DO NOTHING;
+INSERT INTO body_metrics (user_id, date, weight) VALUES
+  ('${ownerId}', '2026-03-01', 70.75),
+  ('${ownerId}', '2026-10-03', 71.4);
+INSERT INTO exercises (id, name, category, primary_muscle, equipment, load_type, is_custom, user_id) VALUES
+  ('e1900000-0000-0000-0000-000000000001', 'Dips', 'push', 'Chest', NULL, 'total', true, '${ownerId}'),
+  ('e1900000-0000-0000-0000-000000000002', 'Chin Up', 'pull', 'Back', NULL, 'total', true, '${ownerId}'),
+  ('e1900000-0000-0000-0000-000000000003', 'Farmer Carry', 'legs', 'Forearms', NULL, 'per_dumbbell', true, '${ownerId}'),
+  ('e1900000-0000-0000-0000-000000000004', 'Hanging Leg Raise', 'core', 'Abs', 'bodyweight', 'total', true, '${ownerId}'),
+  ('e1900000-0000-0000-0000-000000000005', 'Glute Bridge', 'legs', 'Glutes', NULL, 'total', true, '${ownerId}'),
+  ('e1900000-0000-0000-0000-000000000006', 'Lunges', 'legs', 'Quads', NULL, 'total', true, '${ownerId}'),
+  ('e1900000-0000-0000-0000-000000000007', 'Cable Crunch', 'core', 'Abs', 'cable', 'total', true, '${ownerId}'),
+  ('e1900000-0000-0000-0000-000000000008', 'Dips', 'push', 'Chest', NULL, 'total', true, '${thirdId}');
+INSERT INTO activities (id, user_id, date, type, duration, notes, structured_metrics) VALUES
+  ('a1900000-0000-0000-0000-000000000001', '${ownerId}', '2026-10-21', 'gym', 60, 'bw-day', '{}'),
+  ('a1900000-0000-0000-0000-000000000002', '${ownerId}', '2026-02-01', 'gym', 30, 'before-weigh-in', '{}'),
+  ('a1900000-0000-0000-0000-000000000003', '${thirdId}', '2026-10-21', 'gym', 30, 'no-weigh-in', '{}');
+INSERT INTO strength_sets (id, activity_id, exercise_id, set_number, reps, weight) VALUES
+  ('51900000-0000-0000-0000-000000000001', 'a1900000-0000-0000-0000-000000000001', 'e1900000-0000-0000-0000-000000000001', 1, 6, 71.4),
+  ('51900000-0000-0000-0000-000000000002', 'a1900000-0000-0000-0000-000000000001', 'e1900000-0000-0000-0000-000000000001', 2, 9, 86.4),
+  ('51900000-0000-0000-0000-000000000003', 'a1900000-0000-0000-0000-000000000001', (SELECT id FROM exercises WHERE name = 'Plank' AND user_id IS NULL), 1, 70, 71.4),
+  ('51900000-0000-0000-0000-000000000004', 'a1900000-0000-0000-0000-000000000001', 'e1900000-0000-0000-0000-000000000003', 1, 1, 60),
+  ('51900000-0000-0000-0000-000000000005', 'a1900000-0000-0000-0000-000000000001', 'e1900000-0000-0000-0000-000000000004', 1, 15, NULL),
+  ('51900000-0000-0000-0000-000000000006', 'a1900000-0000-0000-0000-000000000001', 'e1900000-0000-0000-0000-000000000006', 1, 10, 20),
+  ('51900000-0000-0000-0000-000000000007', 'a1900000-0000-0000-0000-000000000002', 'e1900000-0000-0000-0000-000000000002', 1, 8, 70),
+  ('51900000-0000-0000-0000-000000000008', 'a1900000-0000-0000-0000-000000000003', 'e1900000-0000-0000-0000-000000000008', 1, 8, 80);
+SELECT upsert_workout_plan(
+  '${ownerId}', '2026-10-21', 'Push', 'Before 019', NULL,
+  jsonb_build_array(
+    jsonb_build_object('position', 1, 'exercise_id', 'e1900000-0000-0000-0000-000000000001',
+      'sets', jsonb_build_array(
+        jsonb_build_object('set_number', 1, 'set_type', 'warmup', 'target_reps_min', 6, 'target_reps_max', 6, 'target_weight_kg', 71.4),
+        jsonb_build_object('set_number', 2, 'set_type', 'top', 'target_reps_min', 9, 'target_reps_max', 10, 'target_weight_kg', 86.4),
+        jsonb_build_object('set_number', 3, 'set_type', 'backoff', 'target_reps_min', 8, 'target_reps_max', 10, 'target_weight_kg', 78.9))),
+    jsonb_build_object('position', 2, 'exercise_id', (SELECT id FROM exercises WHERE name = 'Plank' AND user_id IS NULL),
+      'sets', jsonb_build_array(jsonb_build_object('set_number', 1, 'target_reps_min', 65, 'target_reps_max', 75, 'target_weight_kg', 71.4))),
+    jsonb_build_object('position', 3, 'exercise_id', 'e1900000-0000-0000-0000-000000000004',
+      'sets', jsonb_build_array(jsonb_build_object('set_number', 1, 'target_reps_min', 10, 'target_reps_max', 15))),
+    jsonb_build_object('position', 4, 'exercise_id', 'e1900000-0000-0000-0000-000000000006',
+      'sets', jsonb_build_array(jsonb_build_object('set_number', 1, 'target_reps_min', 10, 'target_reps_max', 12, 'target_weight_kg', 20)))
+  )
+);
+-- A plan the session already started: 019 must leave it usable.
+SELECT upsert_workout_plan(
+  '${ownerId}', '2026-10-22', 'Pull', 'Started before 019', NULL,
+  jsonb_build_array(
+    jsonb_build_object('position', 1, 'exercise_id', 'e1900000-0000-0000-0000-000000000002',
+      'sets', jsonb_build_array(jsonb_build_object('set_number', 1, 'target_reps_min', 5, 'target_reps_max', 8, 'target_weight_kg', 73.9)))
+  )
+);
+SELECT start_workout_session('a1900000-0000-0000-0000-000000000004'::uuid, '2026-10-22'::date, 'gym', NULL, NULL, ARRAY[]::text[],
+  (SELECT id FROM workout_plans WHERE plan_date = '2026-10-22' AND user_id = '${ownerId}'));
+UPDATE test_snapshot SET
+  activities = activities + 4,
+  sets = sets + 8,
+  volume = volume + (SELECT coalesce(sum(volume), 0) FROM strength_sets WHERE id::text LIKE '51900000-%'),
+  exercises = exercises + 8;
+DROP TABLE test_snapshot_018;
+CREATE TABLE test_snapshot_018 AS
+SELECT
+  (SELECT md5(string_agg(concat_ws('|', id, user_id, date, type, sub_type, duration, notes, tags, structured_metrics), ',' ORDER BY id)) FROM activities) AS activities,
+  (SELECT md5(string_agg(concat_ws('|', id, activity_id, exercise_id, set_number, reps, weight, rpe, volume, plan_set_id), ',' ORDER BY id)) FROM strength_sets) AS sets,
+  (SELECT md5(string_agg(concat_ws('|', id, activity_id, exercise_id, position, duration_minutes, calories, label), ',' ORDER BY id)) FROM cardio_entries) AS cardio,
+  (SELECT md5(string_agg(concat_ws('|', id, name, category, primary_muscle, equipment, is_custom, user_id), ',' ORDER BY id)) FROM exercises) AS exercises;
+CREATE TABLE test_snapshot_019 AS
+SELECT
+  (SELECT md5(string_agg(concat_ws('|', id, activity_id, exercise_id, set_number, reps, weight, rpe, rest, tempo, plan_set_id, volume, created_at), ',' ORDER BY id)) FROM strength_sets) AS sets,
+  (SELECT md5(string_agg(concat_ws('|', id, name, category, primary_muscle, secondary_muscles, equipment, is_custom, user_id, created_at), ',' ORDER BY id)) FROM exercises) AS exercises,
+  (SELECT md5(string_agg(concat_ws('|', id, user_id, plan_date, day_type, title, notes, status, activity_id), ',' ORDER BY id)) FROM workout_plans) AS plans,
+  (SELECT md5(string_agg(concat_ws('|', id, plan_id, position, exercise_id, superset_group, note), ',' ORDER BY id)) FROM plan_exercises) AS plan_exercises,
+  (SELECT md5(string_agg(concat_ws('|', id, plan_exercise_id, set_number, set_type, target_rir_min, target_rir_max, rest_seconds, note), ',' ORDER BY id)) FROM plan_sets) AS plan_sets_untouched_cols,
+  (SELECT md5(string_agg(concat_ws('|', id, user_id, date, weight), ',' ORDER BY id)) FROM body_metrics) AS body_metrics;
+`;
+
+// Original columns 019 must not touch. Plan targets are checked by rule in their own case.
+const snapshot019 = `
+SELECT
+  (SELECT md5(string_agg(concat_ws('|', id, activity_id, exercise_id, set_number, reps, weight, rpe, rest, tempo, plan_set_id, volume, created_at), ',' ORDER BY id)) FROM strength_sets) = sets
+  AND (SELECT md5(string_agg(concat_ws('|', id, name, category, primary_muscle, secondary_muscles, equipment, is_custom, user_id, created_at), ',' ORDER BY id)) FROM exercises) = exercises
+  AND (SELECT md5(string_agg(concat_ws('|', id, user_id, plan_date, day_type, title, notes, status, activity_id), ',' ORDER BY id)) FROM workout_plans) = plans
+  AND (SELECT md5(string_agg(concat_ws('|', id, plan_id, position, exercise_id, superset_group, note), ',' ORDER BY id)) FROM plan_exercises) = plan_exercises
+  AND (SELECT md5(string_agg(concat_ws('|', id, plan_exercise_id, set_number, set_type, target_rir_min, target_rir_max, rest_seconds, note), ',' ORDER BY id)) FROM plan_sets) = plan_sets_untouched_cols
+  AND (SELECT md5(string_agg(concat_ws('|', id, user_id, date, weight), ',' ORDER BY id)) FROM body_metrics) = body_metrics
+FROM test_snapshot_019
+`;
+
+const splitChecksum019 = `
+SELECT md5(coalesce(string_agg(concat_ws('|', id, added_weight_kg, bodyweight_kg, duration_sec), ',' ORDER BY id), ''))
+  || md5(coalesce((SELECT string_agg(concat_ws('|', id, target_reps_min, target_reps_max, target_weight_kg, target_duration_sec_min, target_duration_sec_max), ',' ORDER BY id) FROM plan_sets), ''))
+  || md5(coalesce((SELECT string_agg(concat_ws('|', id, load_type, measure), ',' ORDER BY id) FROM exercises), ''))
+FROM strength_sets
+`;
+
 const rlsAuto = `
 CREATE OR REPLACE FUNCTION public.rls_auto_enable() RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN END $$;
@@ -152,6 +250,8 @@ try {
   const files = readdirSync(join(root, 'supabase/migrations')).filter(name => name.endsWith('.sql')).sort();
   const before = files.filter(name => name < '013_');
   const after = files.filter(name => name >= '013_' && name < '018_');
+  const at018 = files.filter(name => name >= '018_' && name < '019_');
+  const from019 = files.filter(name => name >= '019_');
   const latest = files.filter(name => name >= '018_');
   for (const name of before) psqlFile(join(root, 'supabase/migrations', name));
   psql(seed);
@@ -159,10 +259,21 @@ try {
   for (const name of after) psqlFile(join(root, 'supabase/migrations', name));
   // Data written by the 017 app and coach, so 018 has existing rows to flag and convert.
   psql(seed018);
-  for (const name of latest) psqlFile(join(root, 'supabase/migrations', name));
+  for (const name of at018) psqlFile(join(root, 'supabase/migrations', name));
   const after018 = psql(snapshot018);
+  // Data written by the 018 app and coach: bodyweight sets logged as BW in the weight field,
+  // plank seconds in reps, and plan targets that include body weight.
+  psql(seed019);
+  for (const name of from019) psqlFile(join(root, 'supabase/migrations', name));
+  const after019Old = psql(snapshot018);
+  const after019 = psql(snapshot019);
+  const changes019 = psql(`SELECT md5(string_agg(concat_ws('|', table_name, row_id, kind, old), ',' ORDER BY table_name, row_id, kind)) FROM migration_019_changes`);
+  const split019 = psql(splitChecksum019);
   for (const name of latest) psqlFile(join(root, 'supabase/migrations', name));
   const rerun018 = psql(snapshot018);
+  const rerun019 = psql(snapshot019);
+  const rerunChanges019 = psql(`SELECT md5(string_agg(concat_ws('|', table_name, row_id, kind, old), ',' ORDER BY table_name, row_id, kind)) FROM migration_019_changes`);
+  const rerunSplit019 = psql(splitChecksum019);
   // Supabase grants table access to authenticated by default; RLS does the filtering.
   psql(`GRANT SELECT, INSERT, UPDATE, DELETE ON activities, strength_sets, cardio_entries TO authenticated`);
 
@@ -264,6 +375,7 @@ try {
       'start_workout_session(uuid,date,text,text,text,text[],uuid)',
       'finish_workout_session(uuid,integer,text,jsonb,uuid)',
       'discard_workout_session(uuid)',
+      'bodyweight_on(uuid,date)',
     ];
     for (const name of names) {
       const allowed = psql(`SELECT has_function_privilege('anon', 'public.${name}', 'EXECUTE')`);
@@ -276,7 +388,7 @@ try {
       FROM pg_proc p
       JOIN pg_namespace n ON n.oid = p.pronamespace
       WHERE n.nspname = 'public'
-        AND p.proname IN ('get_exercise_summaries', 'get_personal_records', 'get_training_load', 'save_workout', 'get_progress_cards', 'upsert_workout_plan', 'start_workout_session', 'finish_workout_session', 'discard_workout_session')
+        AND p.proname IN ('get_exercise_summaries', 'get_personal_records', 'get_training_load', 'save_workout', 'get_progress_cards', 'upsert_workout_plan', 'start_workout_session', 'finish_workout_session', 'discard_workout_session', 'bodyweight_on')
         AND NOT ('search_path=public' = ANY (COALESCE(p.proconfig, ARRAY[]::text[])))
     `);
     assert(missing === '', missing || 'none');
@@ -528,7 +640,7 @@ try {
     assert(after018 === 't', `checksum changed after 018: ${after018}`);
     const rerun = rerun018;
     assert(rerun === 't', `checksum changed after rerunning 018: ${rerun}`);
-    const status = psql(`SELECT string_agg(DISTINCT status, ',') FROM activities`);
+    const status = psql(`SELECT string_agg(DISTINCT status, ',') FROM activities WHERE id <> 'a1900000-0000-0000-0000-000000000004'`);
     assert(status === 'done', status);
   });
   record('load_type defaults to total and rejects junk', () => {
@@ -547,7 +659,8 @@ try {
   });
   record('dumbbell exercises are flagged per_dumbbell, one-arm and cable ones are not', () => {
     const flagged = psql(`SELECT string_agg(name, ',' ORDER BY name) FROM exercises WHERE load_type = 'per_dumbbell'`);
-    assert(flagged === 'Bulgarian Split Squat,Dumbbell Flye,Dumbbell Overhead Press,Hammer Curl,Incline Dummbell Press,Lateral Raise,Shoulder Dumbell Press', flagged);
+    // Farmer Carry is seeded as per_dumbbell for 019, the way production has it.
+    assert(flagged === 'Bulgarian Split Squat,Dumbbell Flye,Dumbbell Overhead Press,Farmer Carry,Hammer Curl,Incline Dummbell Press,Lateral Raise,Shoulder Dumbell Press', flagged);
   });
   record('existing dumbbell plan targets are halved exactly once', () => {
     const targets = psql(`
@@ -701,6 +814,171 @@ try {
       WHERE e.name = 'Bench Press' AND e.user_id IS NULL
     `);
     assert(licence.startsWith('Unlicense https://raw.githubusercontent.com/yuhonas/free-exercise-db/'), licence);
+  });
+  const planTargets = date => psql(`
+    SELECT string_agg(concat_ws(':', e.name, coalesce(ps.target_reps_min::text, '-'), coalesce(ps.target_reps_max::text, '-'),
+      coalesce(ps.target_weight_kg::numeric(6,2)::text, 'BW'), coalesce(ps.target_duration_sec_min::text, '-'), coalesce(ps.target_duration_sec_max::text, '-')), ','
+      ORDER BY pe.position, ps.set_number)
+    FROM workout_plans wp
+    JOIN plan_exercises pe ON pe.plan_id = wp.id
+    JOIN exercises e ON e.id = pe.exercise_id
+    JOIN plan_sets ps ON ps.plan_exercise_id = pe.id
+    WHERE wp.plan_date = '${date}' AND wp.user_id = '${ownerId}'
+  `);
+  record('019 leaves original set, exercise, plan and body metric columns byte-identical', () => {
+    assert(after019 === 't', `checksum changed after 019: ${after019}`);
+    assert(after019Old === 't', `018 checksum changed after 019: ${after019Old}`);
+    assert(rerun019 === 't', `checksum changed after rerunning 019: ${rerun019}`);
+    assert(split019 === rerunSplit019, 'rerun changed the new columns or flags');
+    assert(changes019 === rerunChanges019, 'rerun changed the reversal record');
+  });
+  record('load_type accepts bodyweight, measure defaults to reps and rejects junk', () => {
+    const fresh = psql(`INSERT INTO exercises (name, category, primary_muscle) VALUES ('Plain 019', 'push', 'Chest') RETURNING load_type || ',' || measure`);
+    assert(fresh === 'total,reps', fresh);
+    psql(`UPDATE exercises SET load_type = 'bodyweight', measure = 'time' WHERE name = 'Plain 019'`);
+    let rejected = false;
+    try {
+      psql(`UPDATE exercises SET measure = 'distance' WHERE name = 'Plain 019'`);
+    } catch (error) {
+      rejected = /exercises_measure_check/.test(String(error));
+    }
+    assert(rejected, 'junk measure accepted');
+    psql(`DELETE FROM exercises WHERE name = 'Plain 019'`);
+  });
+  record('bodyweight exercises are flagged; loaded, cable and dumbbell ones are not', () => {
+    const flagged = psql(`SELECT string_agg(name || CASE WHEN is_custom THEN '(C)' ELSE '(G)' END, ',' ORDER BY name, is_custom) FROM exercises WHERE load_type = 'bodyweight'`);
+    assert(flagged === 'Ab Wheel Rollout(G),Chin Up(C),Dips(C),Dips(C),Glute Bridge(C),Hanging Leg Raise(C),Plank(G),Pull-up(G),Push-up(G)', flagged);
+    const kept = psql(`SELECT string_agg(name || ':' || load_type, ',' ORDER BY name) FROM exercises WHERE name IN ('Lunges', 'Cable Crunch', 'Farmer Carry', 'Bench Press') AND (is_custom OR name = 'Bench Press')`);
+    assert(kept === 'Bench Press:total,Cable Crunch:total,Farmer Carry:per_dumbbell,Lunges:total', kept);
+  });
+  record('timed exercises are flagged, farmer carry stays per dumbbell', () => {
+    const timed = psql(`SELECT string_agg(name || ':' || load_type, ',' ORDER BY name) FROM exercises WHERE measure = 'time'`);
+    assert(timed === 'Farmer Carry:per_dumbbell,Plank:bodyweight', timed);
+  });
+  record('past bodyweight and timed sets get the split in new columns only', () => {
+    const rows = psql(`
+      SELECT string_agg(concat_ws(':', right(id::text, 1), weight, coalesce(bodyweight_kg::text, '-'), coalesce(added_weight_kg::text, '-'), coalesce(duration_sec::text, '-'), coalesce(reps::text, '-')), ',' ORDER BY id)
+      FROM strength_sets WHERE id::text LIKE '51900000-%'
+    `);
+    assert(rows === '1:71.40:71.40:0.00:-:6,2:86.40:71.40:15.00:-:9,3:71.40:71.40:0.00:70:70,4:60.00:-:-:-:1,5:71.40:0.00:-:15,6:20.00:-:-:-:10,7:70.00:70.75:0.00:-:8,8:80.00:-:-:-:8', rows);
+    const totalLoad = psql(`SELECT weight FROM strength_sets WHERE id = '51900000-0000-0000-0000-000000000002'`);
+    assert(Number(totalLoad) === 86.4, `total load changed: ${totalLoad}`);
+  });
+  record('bodyweight plan targets become the added load, timed targets become seconds', () => {
+    const targets = planTargets('2026-10-21');
+    assert(targets === 'Dips:6:6:BW:-:-,Dips:9:10:15.00:-:-,Dips:8:10:7.50:-:-,Plank:-:-:BW:65:75,Hanging Leg Raise:10:15:BW:-:-,Lunges:10:12:20.00:-:-', targets);
+    const started = planTargets('2026-10-22');
+    assert(started === 'Chin Up:5:8:2.50:-:-', started);
+    const record = psql(`SELECT count(*) || ':' || count(*) FILTER (WHERE kind = 'added_weight') || ':' || count(*) FILTER (WHERE kind = 'duration_from_reps') FROM migration_019_changes WHERE table_name = 'plan_sets'`);
+    assert(record === '6:5:1', record);
+  });
+  record('019 data steps reverse from the change record', () => {
+    const before019 = psql(`
+      SELECT string_agg(concat_ws('|', ps.id, coalesce((c.old->>'target_reps_min')::int, ps.target_reps_min), coalesce((c.old->>'target_reps_max')::int, ps.target_reps_max),
+        CASE WHEN c.old ? 'target_weight_kg' THEN (c.old->>'target_weight_kg')::numeric ELSE ps.target_weight_kg END), ',' ORDER BY ps.id)
+      FROM plan_sets ps
+      LEFT JOIN (SELECT row_id, jsonb_object_agg(k, v) AS old FROM migration_019_changes, jsonb_each(old) AS j(k, v) WHERE table_name = 'plan_sets' AND k <> 'bodyweight_kg' GROUP BY row_id) c ON c.row_id = ps.id
+    `);
+    const reversed = psql(`
+      BEGIN;
+      UPDATE strength_sets s SET added_weight_kg = NULL, bodyweight_kg = NULL, duration_sec = NULL
+        FROM migration_019_changes c WHERE c.table_name = 'strength_sets' AND c.row_id = s.id;
+      UPDATE plan_sets p SET target_weight_kg = (c.old->>'target_weight_kg')::numeric
+        FROM migration_019_changes c WHERE c.table_name = 'plan_sets' AND c.kind = 'added_weight' AND c.row_id = p.id;
+      UPDATE plan_sets p SET target_reps_min = (c.old->>'target_reps_min')::int, target_reps_max = (c.old->>'target_reps_max')::int,
+          target_duration_sec_min = NULL, target_duration_sec_max = NULL
+        FROM migration_019_changes c WHERE c.table_name = 'plan_sets' AND c.kind = 'duration_from_reps' AND c.row_id = p.id;
+      UPDATE exercises e SET load_type = c.old->>'load_type'
+        FROM migration_019_changes c WHERE c.table_name = 'exercises' AND c.kind = 'bodyweight_flag' AND c.row_id = e.id;
+      SELECT (SELECT count(*) FROM strength_sets WHERE added_weight_kg IS NOT NULL OR bodyweight_kg IS NOT NULL OR duration_sec IS NOT NULL)
+        + (SELECT count(*) FROM exercises WHERE load_type = 'bodyweight')
+        || ';' || (SELECT string_agg(concat_ws('|', id, target_reps_min, target_reps_max, target_weight_kg), ',' ORDER BY id) FROM plan_sets);
+      ROLLBACK;
+    `);
+    assert(reversed === `0;${before019}`, `${reversed} vs ${before019}`);
+    const still = planTargets('2026-10-21');
+    assert(still.includes('Dips:9:10:15.00'), 'rollback did not keep the migrated values');
+  });
+  record('upsert_workout_plan takes v3 bodyweight and timed sets and still reads old payloads', () => {
+    const plank = psql(`SELECT id FROM exercises WHERE name = 'Plank' AND user_id IS NULL`);
+    psql(`SELECT upsert_workout_plan('${ownerId}', '2026-11-20', 'Pull', 'v3', NULL, $json$[
+      {"position":1,"exercise_id":"e1900000-0000-0000-0000-000000000001","sets":[
+        {"set_number":1,"set_type":"top","target_reps_min":6,"target_reps_max":8,"target_weight_kg":15},
+        {"set_number":2,"target_reps_min":8,"target_reps_max":10}]},
+      {"position":2,"exercise_id":"${plank}","sets":[{"set_number":1,"target_duration_sec_min":45,"target_duration_sec_max":60}]},
+      {"position":3,"exercise_id":"e1900000-0000-0000-0000-000000000003","sets":[{"set_number":1,"target_duration_sec_min":40,"target_duration_sec_max":40,"target_weight_kg":24}]}
+    ]$json$::jsonb)`);
+    const v3 = planTargets('2026-11-20');
+    assert(v3 === 'Dips:6:8:15.00:-:-,Dips:8:10:BW:-:-,Plank:-:-:BW:45:60,Farmer Carry:-:-:24.00:40:40', v3);
+    psql(`SELECT upsert_workout_plan('${ownerId}', '2026-11-21', 'Core', 'v2 shape', NULL, $json$[
+      {"position":1,"exercise_id":"${plank}","sets":[{"set_number":1,"target_reps_min":65,"target_reps_max":75}]},
+      {"position":2,"exercise_id":"e1900000-0000-0000-0000-000000000003","sets":[{"set_number":1,"target_reps_min":1,"target_reps_max":1,"target_weight_kg":24}]},
+      {"position":3,"exercise_id":"e1900000-0000-0000-0000-000000000001","sets":[
+        {"set_number":1,"target_reps_min":6,"target_reps_max":8,"target_weight_kg":86.4},
+        {"set_number":2,"target_reps_min":8,"target_reps_max":10,"target_weight_kg":71.4},
+        {"set_number":3,"target_reps_min":8,"target_reps_max":10,"target_weight_kg":10}]}
+    ]$json$::jsonb)`);
+    const v2 = planTargets('2026-11-21');
+    // v2 sent body weight + added for bodyweight exercises; at or above body weight it is read as a total.
+    assert(v2 === 'Plank:-:-:BW:65:75,Farmer Carry:1:1:24.00:-:-,Dips:6:8:15.00:-:-,Dips:8:10:BW:-:-,Dips:8:10:10.00:-:-', v2);
+    let rejected = false;
+    try {
+      psql(`SELECT upsert_workout_plan('${ownerId}', '2026-11-22', 'Core', 'Bad', NULL, $json$[{"position":1,"exercise_id":"${plank}","sets":[{"set_number":1}]}]$json$::jsonb)`);
+    } catch (error) {
+      rejected = /plan_sets_target_measure_check/.test(String(error));
+    }
+    assert(rejected, 'a set with neither reps nor seconds was accepted');
+    let refused = false;
+    try {
+      psql(`SELECT upsert_workout_plan('${ownerId}', '2026-10-22', 'Pull', 'Overwrite started', NULL, '[]'::jsonb)`);
+    } catch (error) {
+      refused = /cannot be replaced/.test(String(error));
+    }
+    assert(refused, 'started plan was replaced');
+  });
+  record('save_workout keeps the old payload and stores the v3 set keys', () => {
+    const plank = psql(`SELECT id FROM exercises WHERE name = 'Plank' AND user_id IS NULL`);
+    psql(`SELECT save_workout('2026-11-23'::date, 'gym', NULL, 30, 'old-payload-019', ARRAY[]::text[], '{}'::jsonb,
+      jsonb_build_array(jsonb_build_object('exercise_id', 'e1900000-0000-0000-0000-000000000001', 'set_number', 1, 'reps', 8, 'weight', 86.4)),
+      '[]'::jsonb, NULL)`);
+    const old = psql(`SELECT concat_ws(':', s.reps, s.weight, coalesce(s.added_weight_kg::text, '-'), s.volume) FROM strength_sets s JOIN activities a ON a.id = s.activity_id WHERE a.notes = 'old-payload-019'`);
+    assert(old === '8:86.40:-:691.20', old);
+    psql(`SELECT save_workout('2026-11-24'::date, 'gym', NULL, 30, 'v3-payload', ARRAY[]::text[], '{}'::jsonb,
+      jsonb_build_array(
+        jsonb_build_object('exercise_id', 'e1900000-0000-0000-0000-000000000001', 'set_number', 1, 'reps', 8, 'weight', 86.4, 'added_weight_kg', 15, 'bodyweight_kg', 71.4),
+        jsonb_build_object('exercise_id', '${plank}', 'set_number', 1, 'reps', NULL, 'weight', 71.4, 'added_weight_kg', 0, 'bodyweight_kg', 71.4, 'duration_sec', 60)),
+      '[]'::jsonb, NULL)`);
+    const v3 = psql(`SELECT string_agg(concat_ws(':', coalesce(s.reps::text, '-'), s.weight, s.added_weight_kg, s.bodyweight_kg, coalesce(s.duration_sec::text, '-'), s.volume), ',' ORDER BY s.duration_sec NULLS FIRST) FROM strength_sets s JOIN activities a ON a.id = s.activity_id WHERE a.notes = 'v3-payload'`);
+    assert(v3 === '8:86.40:15.00:71.40:-:691.20,-:71.40:0.00:71.40:60:0.00', v3);
+    let rejected = false;
+    try {
+      psql(`INSERT INTO strength_sets (activity_id, exercise_id, set_number, reps, duration_sec) SELECT id, '${plank}', 9, NULL, -5 FROM activities WHERE notes = 'v3-payload'`);
+    } catch (error) {
+      rejected = /strength_sets_load_split_check/.test(String(error));
+    }
+    assert(rejected, 'negative duration accepted');
+  });
+  record('a session started before 019 logs v3 sets and finishes', () => {
+    const planId = psql(`SELECT id FROM workout_plans WHERE plan_date = '2026-10-22' AND user_id = '${ownerId}'`);
+    const planSet = psql(`SELECT ps.id FROM plan_sets ps JOIN plan_exercises pe ON pe.id = ps.plan_exercise_id WHERE pe.plan_id = '${planId}'`);
+    const row = `('51900000-0000-0000-0000-0000000000a1', 'a1900000-0000-0000-0000-000000000004', 'e1900000-0000-0000-0000-000000000002', 1, 6, 73.9, '${planSet}', 2.5, 71.4)`;
+    const upsert = `BEGIN; SET LOCAL ROLE authenticated;
+      INSERT INTO strength_sets (id, activity_id, exercise_id, set_number, reps, weight, plan_set_id, added_weight_kg, bodyweight_kg) VALUES ${row}
+      ON CONFLICT (id) DO UPDATE SET reps = EXCLUDED.reps, weight = EXCLUDED.weight, added_weight_kg = EXCLUDED.added_weight_kg, bodyweight_kg = EXCLUDED.bodyweight_kg;
+      COMMIT;`;
+    psql(upsert);
+    psql(upsert);
+    psql(`SELECT finish_workout_session('a1900000-0000-0000-0000-000000000004'::uuid, 45, NULL, NULL, '${planId}'::uuid)`);
+    const state = psql(`SELECT (SELECT status FROM activities WHERE id = 'a1900000-0000-0000-0000-000000000004') || ':' || (SELECT status FROM workout_plans WHERE id = '${planId}') || ':' || (SELECT count(*) || '/' || max(added_weight_kg) FROM strength_sets WHERE activity_id = 'a1900000-0000-0000-0000-000000000004')`);
+    assert(state === 'done:done:1/2.50', state);
+  });
+  record('the 019 change record is closed to the API', () => {
+    for (const role of ['anon', 'authenticated']) {
+      const allowed = psql(`SELECT has_table_privilege('${role}', 'public.migration_019_changes', 'SELECT')`);
+      assert(allowed === 'f', `${role} can read migration_019_changes`);
+    }
+    const rls = psql(`SELECT relrowsecurity FROM pg_class WHERE relname = 'migration_019_changes'`);
+    assert(rls === 't', rls);
   });
 } finally {
   try {

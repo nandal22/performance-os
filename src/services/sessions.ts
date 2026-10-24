@@ -96,6 +96,7 @@ interface RemoteActivity {
   strength_sets: Array<{
     id: string; exercise_id: string; set_number: number; reps: number | null; weight: number | null;
     rpe: number | null; plan_set_id: string | null; created_at: string; exercise: { name: string } | null;
+    added_weight_kg?: number | null; bodyweight_kg?: number | null; duration_sec?: number | null;
   }> | null;
   cardio_entries: Array<{
     id: string; exercise_id: string | null; position: number; duration_minutes: number | null;
@@ -105,7 +106,10 @@ interface RemoteActivity {
 
 const REMOTE_COLUMNS = `
   id, date, type, sub_type, notes, tags, created_at,
-  strength_sets (id, exercise_id, set_number, reps, weight, rpe, plan_set_id, created_at, exercise:exercises (name)),
+  strength_sets (
+    id, exercise_id, set_number, reps, weight, rpe, plan_set_id, created_at,
+    added_weight_kg, bodyweight_kg, duration_sec, exercise:exercises (name)
+  ),
   cardio_entries (id, exercise_id, position, duration_minutes, calories, label, plan_exercise_id)
 `;
 
@@ -128,10 +132,16 @@ function toSession(row: RemoteActivity, planId: string | null): WorkoutSession {
         exercise_id: set.exercise_id,
         exercise_name: set.exercise?.name ?? 'Exercise',
         set_number: set.set_number,
-        reps: Number(set.reps ?? 0),
+        reps: set.reps == null && set.duration_sec != null ? null : Number(set.reps ?? 0),
         weight: set.weight == null ? null : Number(set.weight),
         rpe: set.rpe == null ? null : Number(set.rpe),
         plan_set_id: set.plan_set_id,
+        ...(set.added_weight_kg != null ? {
+          added_weight_kg: Number(set.added_weight_kg),
+          bodyweight_kg: set.bodyweight_kg == null ? null : Number(set.bodyweight_kg),
+          load_mode: 'bodyweight' as const,
+        } : {}),
+        ...(set.duration_sec != null ? { duration_sec: Number(set.duration_sec) } : {}),
       })),
     cardio: (row.cardio_entries ?? [])
       .slice()

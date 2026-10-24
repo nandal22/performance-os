@@ -6,10 +6,14 @@ export interface SetRow {
   activity_id: string;
   exercise_id: string;
   set_number: number;
-  reps: number;
+  reps: number | null;
   weight: number | null;
   rpe: number | null;
   plan_set_id: string | null;
+  // Sent only when the set has them (migration 019 columns).
+  added_weight_kg?: number | null;
+  bodyweight_kg?: number | null;
+  duration_sec?: number | null;
 }
 
 export interface CardioRow {

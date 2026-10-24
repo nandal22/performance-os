@@ -19,6 +19,8 @@ interface SessionData {
   totalSets: number;
   totalReps: number;
   estMax1RM: number;
+  /** Longest hold or carry that day, for timed exercises. */
+  maxSecs: number;
 }
 
 export default function ExerciseProgressSheet({ exercise, onClose, onTrackToggle, onLogSet }: Props) {
@@ -35,13 +37,14 @@ export default function ExerciseProgressSheet({ exercise, onClose, onTrackToggle
     let cancelled = false;
     strengthSetsService.getByExercise(exercise.id, 300)
       .then(sets => {
-        const byDate: Record<string, { weights: number[]; reps: number[] }> = {};
+        const byDate: Record<string, { weights: number[]; reps: number[]; secs: number[] }> = {};
         for (const s of sets) {
           const date = ((s as unknown as { activity?: { date: string } }).activity?.date) ?? '';
           if (!date) continue;
-          if (!byDate[date]) byDate[date] = { weights: [], reps: [] };
-          if (s.weight) byDate[date].weights.push(s.weight);
+          if (!byDate[date]) byDate[date] = { weights: [], reps: [], secs: [] };
+          if (s.weight) byDate[date].weights.push(Number(s.weight));
           if (s.reps) byDate[date].reps.push(s.reps);
+          if (s.duration_sec) byDate[date].secs.push(Number(s.duration_sec));
         }
         const result: SessionData[] = Object.entries(byDate)
           .map(([date, d]) => {
@@ -50,7 +53,8 @@ export default function ExerciseProgressSheet({ exercise, onClose, onTrackToggle
             return {
               date,
               maxWeight,
-              totalSets: d.weights.length,
+              totalSets: Math.max(d.weights.length, d.secs.length),
+              maxSecs: d.secs.length > 0 ? Math.max(...d.secs) : 0,
               totalReps: d.reps.reduce((a, b) => a + b, 0),
               estMax1RM: maxWeight > 0 && maxReps > 0
                 ? Math.round(maxWeight * (1 + maxReps / 30))
@@ -185,13 +189,17 @@ export default function ExerciseProgressSheet({ exercise, onClose, onTrackToggle
                           )}
                         </div>
                         <p className="text-xs" style={{ color: MUTED }}>
-                          Top set {s.maxWeight} kg · {s.totalReps.toLocaleString()} kg volume
+                          {s.maxSecs > 0 && s.totalReps === 0
+                            ? `Best hold ${s.maxSecs} s${s.maxWeight > 0 ? ` · ${s.maxWeight} kg` : ''}`
+                            : `Top set ${s.maxWeight} kg · ${s.totalReps.toLocaleString()} kg volume`}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {Array.from({ length: s.totalSets }).map((_, idx) => (
                           <span key={idx} className="px-2 py-1 text-xs font-600 nums" style={{ border: `2px solid ${INK}` }}>
-                            {s.maxWeight} × {Math.round(s.totalReps / Math.max(s.totalSets, 1))}
+                            {s.maxSecs > 0 && s.totalReps === 0
+                              ? `${s.maxSecs} s`
+                              : `${s.maxWeight} × ${Math.round(s.totalReps / Math.max(s.totalSets, 1))}`}
                           </span>
                         ))}
                       </div>

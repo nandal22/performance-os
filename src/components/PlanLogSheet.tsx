@@ -1,13 +1,14 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  cardioTargetCalories, cardioTargetLabel, estimatePlanCalories, perDumbbell, prefillFromTarget, repsLabel, targetWeightLabel,
+  addedLoadOf, bodyweightLabel, cardioTargetCalories, cardioTargetLabel, estimatePlanCalories, isTimedTarget, loggedWeightFor,
+  perDumbbell, prefillFromTarget, repsLabel, targetWeightLabel,
 } from '@/lib/planMath';
 import { strengthSessionMetrics } from '@/lib/sessionMetrics';
 import { newId, type SessionSet, type WorkoutSession } from '@/lib/workoutSession';
 import { useSyncStatus } from '@/hooks/useSyncStatus';
 import { bodyMetricsService } from '@/services/bodyMetrics';
 import { exercisesService } from '@/services/exercises';
-import { plansService, type LoadType, type PlanExercise, type PlanSet, type WorkoutPlan } from '@/services/plans';
+import { plansService, type LoadType, type Measure, type PlanExercise, type PlanSet, type WorkoutPlan } from '@/services/plans';
 import { sessionsService, sessionStore } from '@/services/sessions';
 import { toast } from 'sonner';
 
@@ -26,8 +27,10 @@ const inputStyle = { border: `2px solid ${INK}`, background: GROUND, color: INK 
 
 interface Draft {
   reps: string;
+  /** Total kg, the pair for per-dumbbell moves, or the ADDED kg for bodyweight moves ('' = BW). */
   weight: string;
   rpe: string;
+  seconds: string;
 }
 
 interface CardioDraft {
@@ -47,6 +50,7 @@ interface Row {
   restSeconds: number | null;
   rirLabel: string;
   loadType: LoadType;
+  timed: boolean;
   prefill: Draft;
   logged: SessionSet | undefined;
 }
@@ -55,14 +59,22 @@ interface Group {
   exerciseId: string;
   name: string;
   loadType: LoadType;
+  measure: Measure;
   rows: Row[];
 }
 
-function draftFromSet(set: SessionSet): Draft {
+function draftFromSet(set: SessionSet, loadType: LoadType, bodyWeightKg: number | null): Draft {
+  let weight = set.weight == null ? '' : String(set.weight);
+  if (loadType === 'bodyweight') {
+    // Sets logged before the split carry only the total; read the added part off today's body weight.
+    const added = addedLoadOf({ ...set, bodyweight_kg: set.bodyweight_kg ?? (set.added_weight_kg == null ? bodyWeightKg : null) });
+    weight = added != null && added >= 0.05 ? String(added) : added == null ? weight : '';
+  }
   return {
-    reps: String(set.reps),
-    weight: set.weight == null ? '' : String(set.weight),
+    reps: set.reps == null ? '' : String(set.reps),
+    weight,
     rpe: set.rpe == null ? '' : String(set.rpe),
+    seconds: set.duration_sec == null ? '' : String(set.duration_sec),
   };
 }
 
@@ -76,18 +88,19 @@ function withoutKey<T>(record: Record<string, T>, key: string) {
 const DOUBLE_TAP_MS = 450;
 
 function sameDraft(a: Draft, b: Draft) {
-  return a.reps === b.reps && a.weight === b.weight && a.rpe === b.rpe;
+  return a.reps === b.reps && a.weight === b.weight && a.rpe === b.rpe && a.seconds === b.seconds;
 }
 
 function buildGroups(plan: WorkoutPlan, session: WorkoutSession | null): Group[] {
   const groups = new Map<string, Group>();
-  const group = (exerciseId: string, name: string, loadType: LoadType) => {
-    if (!groups.has(exerciseId)) groups.set(exerciseId, { exerciseId, name, loadType, rows: [] });
+  const group = (exerciseId: string, name: string, loadType: LoadType, measure: Measure) => {
+    if (!groups.has(exerciseId)) groups.set(exerciseId, { exerciseId, name, loadType, measure, rows: [] });
     return groups.get(exerciseId) as Group;
   };
   const sets = session?.sets ?? [];
   for (const exercise of plan.exercises.filter(item => !item.is_cardio)) {
-    const target = group(exercise.exercise_id, exercise.exercise_name, exercise.load_type);
+    const measure = exercise.measure ?? 'reps';
+    const target = group(exercise.exercise_id, exercise.exercise_name, exercise.load_type, measure);
     for (const set of exercise.sets) {
       target.rows.push({
         key: set.id,
@@ -96,11 +109,12 @@ function buildGroups(plan: WorkoutPlan, session: WorkoutSession | null): Group[]
         planSetId: set.id,
         setNumber: set.set_number,
         setType: set.set_type,
-        targetLabel: [repsLabel(set), targetWeightLabel(set.target_weight_kg, exercise.load_type)].filter(Boolean).join(' · '),
+        targetLabel: [repsLabel(set, measure), targetWeightLabel(set.target_weight_kg, exercise.load_type)].filter(Boolean).join(' · '),
         restSeconds: set.rest_seconds,
         rirLabel: set.target_rir_max == null ? '' : `RIR ${set.target_rir_min ?? set.target_rir_max}–${set.target_rir_max}`,
         loadType: exercise.load_type,
-        prefill: prefillFromTarget(set, exercise.load_type),
+        timed: isTimedTarget(set, measure),
+        prefill: prefillFromTarget(set, exercise.load_type, measure),
         logged: sets.find(item => item.plan_set_id === set.id),
       });
     }
@@ -112,7 +126,8 @@ function buildGroups(plan: WorkoutPlan, session: WorkoutSession | null): Group[]
       .map(set => ({ id: set.id, exercise_id: set.exercise_id, exercise_name: set.exercise_name })),
   ];
   for (const extra of extras) {
-    const target = group(extra.exercise_id, extra.exercise_name, groups.get(extra.exercise_id)?.loadType ?? 'total');
+    const known = groups.get(extra.exercise_id);
+    const target = group(extra.exercise_id, extra.exercise_name, known?.loadType ?? 'total', known?.measure ?? 'reps');
     target.rows.push({
       key: extra.id,
       exerciseId: extra.exercise_id,
@@ -124,7 +139,8 @@ function buildGroups(plan: WorkoutPlan, session: WorkoutSession | null): Group[]
       restSeconds: null,
       rirLabel: '',
       loadType: target.loadType,
-      prefill: { reps: '', weight: '', rpe: '' },
+      timed: target.measure === 'time',
+      prefill: { reps: '', weight: '', rpe: '', seconds: '' },
       logged: sets.find(set => set.id === extra.id),
     });
   }
@@ -221,7 +237,18 @@ export default function PlanLogSheet({
   const plannedKcal = estimatePlanCalories(plan.exercises, bodyWeightKg);
   const loggedMetrics = session ? strengthSessionMetrics({ sets: session.sets, cardio: session.cardio, bodyWeightKg }) : null;
 
-  const valueOf = (row: Row) => drafts[row.key] ?? (row.logged ? draftFromSet(row.logged) : row.prefill);
+  const loggedDraft = (row: Row) => (row.logged ? draftFromSet(row.logged, row.loadType, bodyWeightKg) : row.prefill);
+  const valueOf = (row: Row) => drafts[row.key] ?? loggedDraft(row);
+
+  // Light hold timer: one at a time, fills the seconds field when stopped.
+  const [timer, setTimer] = useState<{ key: string; startedAt: number } | null>(null);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!timer) return;
+    const id = window.setInterval(() => setTick(tick => tick + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [timer]);
+  const timerSeconds = (startedAt: number) => Math.max(0, Math.round((Date.now() - startedAt) / 1000));
 
   const updateDraft = (row: Row, patch: Partial<Draft>) => {
     setDrafts(current => ({ ...current, [row.key]: { ...valueOf(row), ...patch } }));
@@ -231,12 +258,18 @@ export default function PlanLogSheet({
     if (isDoubleTap(`log:${row.key}`)) return;
     const draft = valueOf(row);
     const reps = Number(draft.reps);
-    if (!Number.isFinite(reps) || reps <= 0) {
-      toast.error('Enter reps');
+    const seconds = Math.round(Number(draft.seconds));
+    if (row.timed ? !Number.isFinite(seconds) || seconds <= 0 : !Number.isFinite(reps) || reps <= 0) {
+      toast.error(row.timed ? 'Enter seconds' : 'Enter reps');
+      return;
+    }
+    const added = draft.weight.trim() === '' ? 0 : Number(draft.weight);
+    if (row.loadType === 'bodyweight' && (!Number.isFinite(added) || added < 0)) {
+      toast.error('Enter added kg, or leave it empty for BW');
       return;
     }
     // Tapping a logged, unchanged set again undoes it: the row is deleted and the set is pending again.
-    if (row.logged && sameDraft(draft, draftFromSet(row.logged))) {
+    if (row.logged && sameDraft(draft, loggedDraft(row))) {
       deleteRow(row);
       return;
     }
@@ -247,13 +280,24 @@ export default function PlanLogSheet({
       exercise_id: row.exerciseId,
       exercise_name: row.exerciseName,
       set_number: row.setNumber,
-      reps,
+      reps: row.timed ? null : reps,
       weight: draft.weight === '' ? null : Number(draft.weight),
       rpe: draft.rpe === '' ? null : Number(draft.rpe),
       plan_set_id: row.planSetId,
       load_mode: row.loadType === 'per_dumbbell' ? 'dumbbell_pair' : 'total',
       input_weight: draft.weight === '' ? undefined : row.loadType === 'per_dumbbell' ? perDumbbell(Number(draft.weight)) : Number(draft.weight),
+      ...(row.timed ? { duration_sec: seconds } : {}),
+      ...(row.loadType === 'bodyweight' ? {
+        // weight stays the total load so volume, Progress and calories read it as before.
+        weight: bodyWeightKg ? loggedWeightFor(added, 'bodyweight', bodyWeightKg) : added > 0 ? added : null,
+        added_weight_kg: added,
+        bodyweight_kg: bodyWeightKg ?? null,
+        load_mode: 'bodyweight' as const,
+        input_weight: added,
+        load_label: bodyweightLabel(added),
+      } : {}),
     };
+    if (timer?.key === row.key) setTimer(null);
     commit(sessionStore.saveSet(current, set));
     setDrafts(current => withoutKey(current, row.key));
   };
@@ -426,7 +470,9 @@ export default function PlanLogSheet({
             {groups.map(group => (
               <section key={group.exerciseId} style={{ border: `2px solid ${INK}` }}>
                 <div className="flex items-center justify-between px-3 py-2" style={{ background: INK, color: GROUND }}>
-                  <p className="text-xs font-800">{group.name}{group.loadType === 'per_dumbbell' ? ' · per DB' : ''}</p>
+                  <p className="text-xs font-800">
+                    {group.name}{group.loadType === 'per_dumbbell' ? ' · per DB' : group.loadType === 'bodyweight' ? ' · BW' : ''}{group.measure === 'time' ? ' · timed' : ''}
+                  </p>
                   <button
                     type="button"
                     aria-label={`Guidance for ${group.name}`}
@@ -451,7 +497,8 @@ export default function PlanLogSheet({
                 {!viewOnly && group.rows.map(row => {
                   const value = valueOf(row);
                   const skipped = session?.skipped.includes(row.key) ?? false;
-                  const changed = row.logged ? !sameDraft(value, draftFromSet(row.logged)) : false;
+                  const changed = row.logged ? !sameDraft(value, loggedDraft(row)) : false;
+                  const running = timer?.key === row.key;
                   const weightNumber = Number(value.weight);
                   return (
                     <div key={row.key} data-testid="plan-set-row" data-state={row.logged ? 'logged' : skipped ? 'skipped' : 'pending'} className="px-3 py-3 space-y-2" style={{ borderTop: `2px solid ${RULE}`, borderLeft: `6px solid ${row.logged ? INK : skipped ? MUTED : 'transparent'}`, background: PANEL, opacity: skipped ? 0.7 : 1 }}>
@@ -463,29 +510,70 @@ export default function PlanLogSheet({
                         <p className="text-[11px] font-800" aria-label="Rest timer">Rest {row.restSeconds}s</p>
                       )}
                       <div className="grid grid-cols-3 gap-2">
+                        {row.timed ? (
+                          <label className="text-[10px] font-800 uppercase" style={{ color: MUTED }}>
+                            Sec
+                            <input
+                              aria-label={`${row.exerciseName} set ${row.setNumber} seconds`}
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              value={running && timer ? String(timerSeconds(timer.startedAt)) : value.seconds}
+                              disabled={readOnly || running}
+                              onChange={event => updateDraft(row, { seconds: event.target.value })}
+                              className="mt-1 w-full min-h-11 px-2 text-sm nums"
+                              style={inputStyle}
+                            />
+                            {!readOnly && (
+                              <button
+                                type="button"
+                                data-testid="hold-timer"
+                                aria-label={running ? `Stop timer for ${row.exerciseName} set ${row.setNumber}` : `Start timer for ${row.exerciseName} set ${row.setNumber}`}
+                                onClick={() => {
+                                  if (running && timer) {
+                                    updateDraft(row, { seconds: String(timerSeconds(timer.startedAt)) });
+                                    setTimer(null);
+                                  } else {
+                                    setTimer({ key: row.key, startedAt: Date.now() });
+                                  }
+                                }}
+                                className="mt-1 w-full min-h-11 text-[11px] font-800 normal-case"
+                                style={{ border: `2px solid ${INK}`, background: running ? ACCENT : GROUND, color: running ? GROUND : INK }}
+                              >
+                                {running ? 'Stop' : 'Timer'}
+                              </button>
+                            )}
+                          </label>
+                        ) : (
+                          <label className="text-[10px] font-800 uppercase" style={{ color: MUTED }}>
+                            Reps
+                            <input
+                              aria-label={`${row.exerciseName} set ${row.setNumber} reps`}
+                              inputMode="numeric"
+                              value={value.reps}
+                              disabled={readOnly}
+                              onChange={event => updateDraft(row, { reps: event.target.value })}
+                              className="mt-1 w-full min-h-11 px-2 text-sm nums"
+                              style={inputStyle}
+                            />
+                          </label>
+                        )}
                         <label className="text-[10px] font-800 uppercase" style={{ color: MUTED }}>
-                          Reps
+                          {row.loadType === 'per_dumbbell' ? 'Kg (pair)' : row.loadType === 'bodyweight' ? '+ Kg' : 'Kg'}
                           <input
-                            aria-label={`${row.exerciseName} set ${row.setNumber} reps`}
-                            inputMode="numeric"
-                            value={value.reps}
-                            disabled={readOnly}
-                            onChange={event => updateDraft(row, { reps: event.target.value })}
-                            className="mt-1 w-full min-h-11 px-2 text-sm nums"
-                            style={inputStyle}
-                          />
-                        </label>
-                        <label className="text-[10px] font-800 uppercase" style={{ color: MUTED }}>
-                          {row.loadType === 'per_dumbbell' ? 'Kg (pair)' : 'Kg'}
-                          <input
-                            aria-label={`${row.exerciseName} set ${row.setNumber} weight`}
+                            aria-label={`${row.exerciseName} set ${row.setNumber} ${row.loadType === 'bodyweight' ? 'added weight' : 'weight'}`}
                             inputMode="decimal"
+                            placeholder={row.loadType === 'bodyweight' ? 'BW' : undefined}
                             value={value.weight}
                             disabled={readOnly}
                             onChange={event => updateDraft(row, { weight: event.target.value })}
                             className="mt-1 w-full min-h-11 px-2 text-sm nums"
                             style={inputStyle}
                           />
+                          {row.loadType === 'bodyweight' && (
+                            <span data-testid="bw-load" className="mt-1 block text-[11px] font-800 normal-case nums" style={{ color: INK }}>
+                              {value.weight.trim() === '' || Number.isFinite(weightNumber) ? bodyweightLabel(value.weight.trim() === '' ? 0 : weightNumber) : 'BW + kg'}
+                            </span>
+                          )}
                           {row.loadType === 'per_dumbbell' && (
                             <span data-testid="per-db" className="mt-1 block text-[11px] font-800 normal-case nums" style={{ color: INK }}>
                               {value.weight !== '' && Number.isFinite(weightNumber) ? `= ${perDumbbell(weightNumber)} kg / DB` : 'kg / DB = half'}

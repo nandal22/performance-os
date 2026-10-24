@@ -35,6 +35,28 @@ vi.mock('@/services/exercises', () => ({
       is_custom: true,
       created_at: '',
       load_type: 'per_dumbbell',
+    }, {
+      id: 'chin',
+      name: 'Chin Up',
+      category: 'pull',
+      primary_muscle: 'Back',
+      secondary_muscles: [],
+      is_custom: true,
+      created_at: '',
+      equipment: 'other',
+      load_type: 'bodyweight',
+      measure: 'reps',
+    }, {
+      id: 'plank',
+      name: 'Plank',
+      category: 'core',
+      primary_muscle: 'Core',
+      secondary_muscles: [],
+      is_custom: false,
+      created_at: '',
+      equipment: 'bodyweight',
+      load_type: 'bodyweight',
+      measure: 'time',
     }]),
     getTrackedIds: () => [],
     toggleTracked: () => false,
@@ -188,5 +210,52 @@ describe('LogWorkoutSheet persistence', () => {
     await settle();
     expect([...server.state.sets.values()][0]).toMatchObject({ exercise_id: 'hammer', weight: 25, reps: 12 });
     expect(screen.getByText('(12.5 / DB)')).toBeTruthy();
+  });
+});
+
+describe('LogWorkoutSheet bodyweight and timed exercises', () => {
+  it('picks BW entry for a bodyweight exercise and stores BW + added with the split', async () => {
+    const user = userEvent.setup();
+    render(<LogWorkoutSheet open onClose={() => undefined} onSuccess={() => undefined} initialExerciseName="Chin Up" />);
+    await settle();
+    expect(await screen.findByText(/Auto-selected from exercise type: bodyweight/)).toBeTruthy();
+    await user.type(screen.getByRole('spinbutton', { name: 'Reps' }), '6');
+    await user.type(screen.getByRole('spinbutton', { name: 'Added kg' }), '10');
+    await user.click(screen.getByRole('button', { name: /Log Set|Set Logged/ }));
+    await user.type(screen.getByRole('spinbutton', { name: 'Reps' }), '8');
+    await user.click(screen.getByRole('button', { name: /Log Set|Set Logged/ }));
+    await settle();
+    const rows = [...server.state.sets.values()];
+    expect(rows[0]).toMatchObject({ exercise_id: 'chin', reps: 6, weight: 90, added_weight_kg: 10, bodyweight_kg: 80 });
+    expect(rows[1]).toMatchObject({ reps: 8, weight: 80, added_weight_kg: 0, bodyweight_kg: 80 });
+    expect(screen.getByText('BW + 10 kg')).toBeTruthy();
+    expect(screen.getByText('BW')).toBeTruthy();
+  });
+
+  it('logs a timed exercise in seconds on a numeric keypad', async () => {
+    const user = userEvent.setup();
+    render(<LogWorkoutSheet open onClose={() => undefined} onSuccess={() => undefined} initialExerciseName="Plank" />);
+    await settle();
+    const secs = await screen.findByRole('spinbutton', { name: 'Seconds' });
+    expect(secs.getAttribute('inputMode')).toBe('numeric');
+    expect(screen.queryByRole('spinbutton', { name: 'Reps' })).toBeNull();
+    await user.type(secs, '45');
+    await user.click(screen.getByRole('button', { name: /Log Set|Set Logged/ }));
+    await settle();
+    expect([...server.state.sets.values()][0]).toMatchObject({ exercise_id: 'plank', reps: null, duration_sec: 45, weight: 80, added_weight_kg: 0 });
+    expect(screen.getByRole('button', { name: 'Edit Plank set 1' })).toBeTruthy();
+    expect(document.body.textContent).toContain('45 s');
+  });
+
+  it('keeps an ordinary set in the old row shape', async () => {
+    const user = userEvent.setup();
+    render(<LogWorkoutSheet open onClose={() => undefined} onSuccess={() => undefined} initialExerciseName="Bench Press" />);
+    await settle();
+    await user.click(screen.getByRole('button', { name: /^Total kg/ }));
+    await logBench(user, '5', '80');
+    await settle();
+    expect(Object.keys([...server.state.sets.values()][0]).sort()).toEqual(
+      ['activity_id', 'exercise_id', 'id', 'plan_set_id', 'reps', 'rpe', 'set_number', 'weight'],
+    );
   });
 });
