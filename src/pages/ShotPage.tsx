@@ -6,7 +6,7 @@ import TodayPlanCard from '@/components/TodayPlanCard';
 import PlanLogSheet from '@/components/PlanLogSheet';
 import PlanVsActual from '@/components/PlanVsActual';
 import type { WorkoutCategory } from '@/types';
-import { DETAIL_PREVIEW, PLAN_COMPARISON, PLAN_PREVIEW, PLAN_SUMMARY, PROGRESS_PREVIEW, RESUMED_SESSION } from '@/pages/shotFixtures';
+import { BW_TIMED_PLAN, BW_TIMED_SESSION, DETAIL_PREVIEW, PLAN_COMPARISON, PLAN_PREVIEW, PLAN_SUMMARY, PROGRESS_PREVIEW, RESUMED_SESSION } from '@/pages/shotFixtures';
 import { sessionStorageKey } from '@/lib/workoutSession';
 
 export default function ShotPage() {
@@ -48,6 +48,16 @@ export default function ShotPage() {
     return (
       <div style={{ minHeight: '100dvh', background: '#f3f2f2' }}>
         <PlanLogSheet plan={plan} bodyWeightKg={71.4} onClose={() => undefined} onSaved={() => undefined} />
+      </div>
+    );
+  }
+
+  if (shot === 'plan-bwtimed') {
+    // A BW + 15 kg dips set and a 52 s plank logged locally; nothing is written to the server.
+    localStorage.setItem(sessionStorageKey(BW_TIMED_PLAN.id), JSON.stringify(BW_TIMED_SESSION));
+    return (
+      <div style={{ minHeight: '100dvh', background: '#f3f2f2' }}>
+        <PlanLogSheet plan={BW_TIMED_PLAN} bodyWeightKg={71.4} onClose={() => undefined} onSaved={() => undefined} />
       </div>
     );
   }

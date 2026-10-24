@@ -1,4 +1,4 @@
-import { cardioTargetLabel, perDumbbell, repsLabel, setOutcome, targetWeightLabel, type PlanTarget } from '@/lib/planMath';
+import { cardioTargetLabel, loggedSetLabel, repsLabel, setOutcome, targetWeightLabel, type PlanTarget } from '@/lib/planMath';
 import type { ComparedExercise, PlanComparison } from '@/services/plans';
 
 const INK = '#201e1d';
@@ -40,9 +40,10 @@ export default function PlanVsActual({ comparison }: { comparison: PlanCompariso
           <p className="px-3 py-2 text-xs font-800" style={{ background: INK, color: GROUND }}>{exercise.name}</p>
           <CardioRow exercise={exercise} />
           {exercise.sets.map(set => {
-            const outcome = setOutcome(set as PlanTarget, set.actual, exercise.load_type);
+            const measure = exercise.measure ?? 'reps';
+            const outcome = setOutcome(set as PlanTarget, set.actual, exercise.load_type, measure);
             const tone = outcome === 'hit' ? ACCENT_DEEP : MUTED;
-            const perDb = exercise.load_type === 'per_dumbbell';
+            const weightLabel = targetWeightLabel(set.target_weight_kg, exercise.load_type);
             return (
               <div key={set.id} className="px-3 py-2.5" style={{ background: PANEL, borderTop: `2px solid ${RULE}` }}>
                 <div className="flex items-center justify-between gap-2">
@@ -50,13 +51,13 @@ export default function PlanVsActual({ comparison }: { comparison: PlanCompariso
                   <p className="text-[11px] font-800 uppercase" style={{ color: tone }}>{outcome}</p>
                 </div>
                 <p className="text-sm mt-1 nums">
-                  Target {repsLabel(set)}
-                  {set.target_weight_kg != null ? ` · ${targetWeightLabel(set.target_weight_kg, exercise.load_type)}` : ''}
+                  Target {repsLabel(set as PlanTarget, measure)}
+                  {weightLabel ? ` · ${weightLabel}` : ''}
                   {set.target_rir_max != null ? ` · RIR ${set.target_rir_min ?? set.target_rir_max}–${set.target_rir_max}` : ''}
                 </p>
                 <p className="text-sm nums" style={{ color: MUTED }}>
                   {set.actual
-                    ? `Actual ${set.actual.reps} reps${set.actual.weight != null ? ` · ${set.actual.weight} kg${perDb ? ` (${perDumbbell(set.actual.weight)} / DB)` : ''}` : ''}${set.actual.rpe != null ? ` · RPE ${set.actual.rpe}` : ''}`
+                    ? `Actual ${loggedSetLabel(set.actual, exercise.load_type)}${set.actual.rpe != null ? ` · RPE ${set.actual.rpe}` : ''}`
                     : 'Actual skipped'}
                 </p>
               </div>

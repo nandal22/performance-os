@@ -13,6 +13,7 @@ export function strengthSessionMetrics(input: {
     ? calcStrengthCalories({
         sets: sets.map(set => ({
           reps: set.reps,
+          durationSec: set.duration_sec,
           weight: set.weight ?? 0,
           loadMode: set.load_mode,
           bodyweightFactor: set.bodyweight_factor,
@@ -44,6 +45,8 @@ export function strengthSessionMetrics(input: {
           exerciseId: set.exercise_id,
           exerciseName: set.exercise_name,
           reps: set.reps,
+          ...(set.duration_sec != null ? { durationSec: set.duration_sec } : {}),
+          ...(set.added_weight_kg != null ? { addedWeightKg: set.added_weight_kg } : {}),
           effectiveWeight: set.weight ?? 0,
           mode: set.load_mode ?? 'total',
           inputWeight: set.input_weight ?? set.weight ?? 0,

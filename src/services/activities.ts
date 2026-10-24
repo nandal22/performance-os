@@ -60,6 +60,7 @@ export const activitiesService = {
         id, user_id, date, type, sub_type, duration, notes, tags, structured_metrics, created_at, updated_at,
         strength_sets (
           id, activity_id, exercise_id, set_number, reps, weight, rpe, rest, tempo, volume, created_at,
+          added_weight_kg, bodyweight_kg, duration_sec,
           exercise:exercises (id, name, category, primary_muscle, secondary_muscles, equipment, is_custom, user_id, created_at)
         ),
         cardio_metrics (id, activity_id, distance, avg_heart_rate, max_heart_rate, elevation, calories, avg_pace, created_at),

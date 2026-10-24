@@ -41,7 +41,9 @@ export interface Exercise {
   secondary_muscles: string[];
   equipment?: Equipment;
   /** per_dumbbell: plan targets are one dumbbell; logged weight is the pair. */
-  load_type?: 'total' | 'per_dumbbell';
+  load_type?: 'total' | 'per_dumbbell' | 'bodyweight';
+  /** 'time': logged in seconds (planks, holds, carries). Missing before migration 019 = 'reps'. */
+  measure?: 'reps' | 'time';
   is_custom: boolean;
   user_id?: string;       // null = system exercise
   created_at: string;
@@ -58,6 +60,10 @@ export interface StrengthSet {
   rest?: number;          // seconds
   tempo?: string;         // e.g., '3-1-2-0'
   volume: number;         // generated: reps * weight
+  /** Migration 019: bodyweight split (weight stays the total) and seconds for timed sets. */
+  added_weight_kg?: number | null;
+  bodyweight_kg?: number | null;
+  duration_sec?: number | null;
   created_at: string;
 }
 

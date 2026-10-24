@@ -12,6 +12,7 @@ import { useSyncStatus } from '@/hooks/useSyncStatus';
 import { toISODate } from '@/lib/utils';
 import { calcCardioCalories } from '@/engines/calorieEngine';
 import { strengthSessionMetrics } from '@/lib/sessionMetrics';
+import { bodyweightLabel } from '@/lib/planMath';
 import { globalSetNumber, newId, type LoadMode, type SessionCardio, type SessionSet, type WorkoutSession } from '@/lib/workoutSession';
 // Lazy: this sheet owns the recharts dependency (~400 KB raw).
 const ExerciseProgressSheet = lazy(() => import('./ExerciseProgressSheet'));
@@ -182,7 +183,11 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, initialType,
   const selectedExercise = currentExerciseId
     ? exercises.find(exercise => exercise.id === currentExerciseId)
     : null;
-  const selectedEquipment = selectedExercise?.load_type === 'per_dumbbell' ? 'dumbbell' : selectedExercise?.equipment ?? null;
+  const selectedEquipment = selectedExercise?.load_type === 'per_dumbbell'
+    ? 'dumbbell'
+    : selectedExercise?.load_type === 'bodyweight' ? 'bodyweight' : selectedExercise?.equipment ?? null;
+  // Timed moves (planks, holds, carries) log seconds instead of reps.
+  const timed = selectedExercise?.measure === 'time';
   const isStrengthUI = isStrengthCategory(type, subType);
   const isOther = type === 'other';
   const isCardioExercise = currentEx ? isCardioName(currentEx.name) : false;
@@ -325,6 +330,8 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, initialType,
         input_weight: currentWeightValue,
         bodyweight_factor: factor,
         bodyweight_kg: bodyWeightKg,
+        // The split is stored with the set; weight stays the total effective load.
+        added_weight_kg: currentWeightValue,
         load_label: currentWeightValue > 0
           ? `${bodyweightLabel} + ${currentWeightValue} kg`
           : bodyweightLabel,
@@ -386,7 +393,7 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, initialType,
 
   const logSet = () => {
     if (!currentEx) return toast.error('Pick an exercise first');
-    if (!currentReps || parseInt(currentReps) <= 0) return toast.error('Enter reps');
+    if (!currentReps || parseInt(currentReps) <= 0) return toast.error(timed ? 'Enter seconds' : 'Enter reps');
     const load = buildLoad();
     if (loadMode === 'bodyweight' && !bodyWeightKg) {
       toast.message('Bodyweight set saved without bodyweight load estimate');
@@ -398,7 +405,9 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, initialType,
       exercise_id:   currentEx.id,
       exercise_name: currentEx.name,
       set_number:    current.sets.length + 1,
-      reps:          parseInt(currentReps),
+      reps:          timed ? null : parseInt(currentReps),
+      ...(timed ? { duration_sec: parseInt(currentReps) } : {}),
+      ...('added_weight_kg' in load ? { added_weight_kg: load.added_weight_kg } : {}),
       weight:        load.weight,
       rpe:           null,
       plan_set_id:   null,
@@ -426,18 +435,35 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, initialType,
 
   const startEdit = (s: SessionSet) => {
     setEditUid(s.id);
-    setEditReps(String(s.reps));
-    setEditWeight((s.weight ?? 0) > 0 ? String(s.weight) : '');
+    setEditReps(String(s.reps ?? s.duration_sec ?? ''));
+    // Bodyweight sets edit the added kg; the rest edit the total.
+    const shown = s.added_weight_kg != null ? s.added_weight_kg : s.weight ?? 0;
+    setEditWeight(shown > 0 ? String(shown) : '');
   };
 
   const saveEdit = () => {
     const current = sessionRef.current;
     const original = current?.sets.find(s => s.id === editUid);
     if (!current || !original) { setEditUid(null); return; }
-    const weight = parseFloat(editWeight) || 0;
+    const entered = parseFloat(editWeight) || 0;
+    const count = parseInt(editReps);
+    const isTimedSet = original.reps == null && original.duration_sec != null;
+    if (original.added_weight_kg != null) {
+      const base = Math.round(((original.weight ?? 0) - original.added_weight_kg) * 100) / 100;
+      commit(sessionStore.saveSet(current, {
+        ...original,
+        ...(isTimedSet ? { duration_sec: count || original.duration_sec } : { reps: count || original.reps }),
+        weight: Math.round((base + entered) * 100) / 100,
+        added_weight_kg: entered,
+        input_weight: entered,
+      }));
+      setEditUid(null);
+      return;
+    }
+    const weight = entered;
     commit(sessionStore.saveSet(current, {
       ...original,
-      reps: parseInt(editReps) || original.reps,
+      ...(isTimedSet ? { duration_sec: count || original.duration_sec } : { reps: count || original.reps }),
       weight,
       input_weight: original.load_mode === 'dumbbell_pair' ? weight / 2 : original.load_mode === 'total' ? weight : original.input_weight,
     }));
@@ -983,13 +1009,14 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, initialType,
 
                   <div className="flex items-end gap-2">
                     <div className="flex-1">
-                      <label className="text-[10px] font-800 uppercase tracking-[0.08em] block mb-1" style={{ color: MUTED }}>Reps</label>
+                      <label className="text-[10px] font-800 uppercase tracking-[0.08em] block mb-1" style={{ color: MUTED }}>{timed ? 'Sec' : 'Reps'}</label>
                       <input
                         ref={repsRef}
                         type="number"
                         inputMode="numeric"
-                        aria-label="Reps"
-                        placeholder="10"
+                        pattern="[0-9]*"
+                        aria-label={timed ? 'Seconds' : 'Reps'}
+                        placeholder={timed ? '45' : '10'}
                         value={currentReps}
                         onChange={e => setCurrentReps(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && logSet()}
@@ -1111,10 +1138,10 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, initialType,
                                   inputMode="numeric"
                                   value={editReps}
                                   onChange={e => setEditReps(e.target.value)}
-                                  aria-label="Edit reps"
+                                  aria-label={s.reps == null && s.duration_sec != null ? 'Edit seconds' : 'Edit reps'}
                                   className="w-14 min-h-11 px-2 py-1 text-sm nums text-center focus:outline-none"
                                   style={inputStyle}
-                                  placeholder="reps"
+                                  placeholder={s.reps == null && s.duration_sec != null ? 'sec' : 'reps'}
                                 />
                                 <span className="text-xs font-800" style={{ color: MUTED }}>×</span>
                                 <input
@@ -1122,10 +1149,10 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, initialType,
                                   inputMode="decimal"
                                   value={editWeight}
                                   onChange={e => setEditWeight(e.target.value)}
-                                  aria-label="Edit weight"
+                                  aria-label={s.added_weight_kg != null ? 'Edit added weight' : 'Edit weight'}
                                   className="w-16 min-h-11 px-2 py-1 text-sm nums text-center focus:outline-none"
                                   style={inputStyle}
-                                  placeholder="kg"
+                                  placeholder={s.added_weight_kg != null ? 'BW' : 'kg'}
                                 />
                                 <button onClick={saveEdit} className="inline-flex min-h-11 min-w-11 items-center justify-center ml-auto" style={{ color: ACCENT_DEEP }} aria-label="Save set">
                                   <CheckCircle2 className="w-4 h-4" />
@@ -1139,8 +1166,12 @@ export default function LogWorkoutSheet({ open, onClose, onSuccess, initialType,
                               <div className="flex items-center px-3 py-2.5 gap-3">
                                 <span className="text-xs font-800 w-5 flex-shrink-0" style={{ color: MUTED }}>S{i + 1}</span>
                                 <span className="text-sm flex-1 nums">
-                                  <span className="font-800">{s.reps}</span> reps
-                                  {(s.weight ?? 0) > 0 && (
+                                  {s.reps == null && s.duration_sec != null
+                                    ? <><span className="font-800">{s.duration_sec}</span> s</>
+                                    : <><span className="font-800">{s.reps}</span> reps</>}
+                                  {s.added_weight_kg != null ? (
+                                    <> × <span className="font-800">{bodyweightLabel(s.added_weight_kg)}</span></>
+                                  ) : (s.weight ?? 0) > 0 && (
                                     <> × <span className="font-800">{s.weight} kg</span>{s.load_mode === 'dumbbell_pair' && <span style={{ color: MUTED }}> ({(s.weight ?? 0) / 2} / DB)</span>}</>
                                   )}
                                 </span>

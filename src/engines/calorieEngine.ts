@@ -174,7 +174,9 @@ export function calcCardioCalories(input: CardioInput, weightKg: number): Calori
 
 export interface StrengthSetInput {
   weight: number;
-  reps: number;
+  reps: number | null;
+  /** Seconds held or carried. Counts as active time when the set has no reps. */
+  durationSec?: number | null;
   loadMode?: 'total' | 'dumbbell_pair' | 'barbell_plates' | 'bodyweight';
   bodyweightFactor?: number;
   bodyweightKg?: number | null;
@@ -220,11 +222,17 @@ export function calcStrengthCalories(input: StrengthInput, weightKg: number): Ca
       effectiveWeight: effectiveStrengthLoad(set, weightKg),
     }))
     .filter(set => set.reps > 0);
+  // Timed sets (planks, carries) have seconds instead of reps: they add active time but
+  // no volume. Rows logged before timed sets existed keep their reps and are read as before.
+  const timedSecs = input.sets
+    .filter(set => !(set.reps && set.reps > 0) && (set.durationSec ?? 0) > 0)
+    .map(set => Number(set.durationSec));
+  const totalTimedSecs = timedSecs.reduce((sum, secs) => sum + secs, 0);
   const weightedSets = validSets.filter(set => set.effectiveWeight > 0);
   const totalVolumeKg = validSets.reduce((sum, set) => sum + set.effectiveWeight * set.reps, 0);
   const totalReps = validSets.reduce((sum, set) => sum + set.reps, 0);
 
-  const totalSets = Math.max(validSets.length || input.sets.length, 1);
+  const totalSets = Math.max((validSets.length + timedSecs.length) || input.sets.length, 1);
   const fallbackDurationMins = Math.round((totalSets * (SET_DURATION_SECS + REST_DURATION_SECS)) / 60);
   const estimatedDurationMins = hasLoggedDuration ? (input.duration as number) : fallbackDurationMins;
   const duration_hrs = estimatedDurationMins / 60;
@@ -232,7 +240,7 @@ export function calcStrengthCalories(input: StrengthInput, weightKg: number): Ca
     estimatedDurationMins,
     Math.max(
       (totalSets * SET_DURATION_SECS) / 60,
-      (totalReps * SECONDS_PER_REP + totalSets * SET_TRANSITION_SECS) / 60,
+      (totalReps * SECONDS_PER_REP + totalTimedSecs + totalSets * SET_TRANSITION_SECS) / 60,
     ),
   );
   const active_duration_hrs = estimatedActiveMins / 60;
@@ -240,7 +248,7 @@ export function calcStrengthCalories(input: StrengthInput, weightKg: number): Ca
     ? 'strength_load_adjusted'
     : hasLoggedDuration ? 'strength_intensity' : 'strength_duration';
 
-  if (validSets.length === 0) {
+  if (validSets.length === 0 && timedSecs.length === 0) {
     return {
       calories: Math.round(STRENGTH_DEFAULT_MET * weightKg * duration_hrs),
       met: STRENGTH_DEFAULT_MET,

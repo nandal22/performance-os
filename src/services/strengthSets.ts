@@ -26,7 +26,7 @@ export const strengthSetsService = {
     return readQuery(key, 60_000, async () => {
       const { data, error } = await supabase
         .from('strength_sets')
-        .select('id, activity_id, exercise_id, set_number, reps, weight, rpe, rest, tempo, volume, created_at, activity:activities!inner(date)')
+        .select('id, activity_id, exercise_id, set_number, reps, weight, rpe, rest, tempo, volume, added_weight_kg, bodyweight_kg, duration_sec, created_at, activity:activities!inner(date)')
         .in('exercise_id', exerciseIds)
         .order('created_at', { ascending: false })
         .limit(limit);

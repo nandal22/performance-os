@@ -286,3 +286,65 @@ export const PLAN_COMPARISON: PlanComparison = {
     },
   ],
 };
+
+const bwSet = (id: string, n: number, extra: Partial<WorkoutPlan['exercises'][number]['sets'][number]>) => ({
+  id, set_number: n, set_type: 'straight' as const, target_reps_min: null, target_reps_max: null,
+  target_duration_sec_min: null, target_duration_sec_max: null, target_weight_kg: null,
+  target_rir_min: 1, target_rir_max: 2, rest_seconds: 90, note: null, ...extra,
+});
+
+/** Bodyweight and timed exercises (019): Dips at BW and BW + 15 kg, a Plank and a Farmer Carry in seconds. */
+export const BW_TIMED_PLAN: WorkoutPlan = {
+  id: 'plan-bw-shot',
+  plan_date: '2026-10-26',
+  day_type: 'Pull',
+  title: 'Dips, plank and carries',
+  notes: null,
+  status: 'in_progress',
+  activity_id: 'plan-bw-shot',
+  exercise_count: 3,
+  planned: [],
+  exercises: [
+    {
+      id: 'pe-dips', position: 1, exercise_id: 'dips', exercise_name: 'Dips', superset_group: null, note: null,
+      is_cardio: false, load_type: 'bodyweight', measure: 'reps', ...NO_CARDIO,
+      sets: [
+        bwSet('ps-dips-1', 1, { set_type: 'top', target_reps_min: 6, target_reps_max: 8, target_weight_kg: 15 }),
+        bwSet('ps-dips-2', 2, { set_type: 'backoff', target_reps_min: 8, target_reps_max: 10 }),
+      ],
+    },
+    {
+      id: 'pe-plank', position: 2, exercise_id: 'plank', exercise_name: 'Plank', superset_group: null, note: null,
+      is_cardio: false, load_type: 'bodyweight', measure: 'time', ...NO_CARDIO,
+      sets: [
+        bwSet('ps-plank-1', 1, { target_duration_sec_min: 45, target_duration_sec_max: 60 }),
+        bwSet('ps-plank-2', 2, { target_duration_sec_min: 45, target_duration_sec_max: 60 }),
+      ],
+    },
+    {
+      id: 'pe-carry', position: 3, exercise_id: 'carry', exercise_name: 'Farmer Carry', superset_group: null, note: null,
+      is_cardio: false, load_type: 'per_dumbbell', measure: 'time', ...NO_CARDIO,
+      sets: [bwSet('ps-carry-1', 1, { target_duration_sec_min: 40, target_duration_sec_max: 60, target_weight_kg: 24 })],
+    },
+  ],
+};
+BW_TIMED_PLAN.planned = BW_TIMED_PLAN.exercises;
+
+export const BW_TIMED_SESSION: WorkoutSession = {
+  version: 1,
+  activityId: 'plan-bw-shot',
+  planId: 'plan-bw-shot',
+  type: 'gym',
+  subType: null,
+  date: '2026-10-26',
+  notes: 'Pull',
+  tags: ['Pull'],
+  startedAt: Date.now() - 20 * 60_000,
+  sets: [
+    { id: 'bw-set-1', exercise_id: 'dips', exercise_name: 'Dips', set_number: 1, reps: 8, weight: 86.4, rpe: 8.5, plan_set_id: 'ps-dips-1', added_weight_kg: 15, bodyweight_kg: 71.4 },
+    { id: 'bw-set-2', exercise_id: 'plank', exercise_name: 'Plank', set_number: 1, reps: null, weight: 71.4, rpe: 8, plan_set_id: 'ps-plank-1', added_weight_kg: 0, bodyweight_kg: 71.4, duration_sec: 52 },
+  ],
+  cardio: [],
+  skipped: [],
+  extras: [],
+};

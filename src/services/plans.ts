@@ -2,7 +2,21 @@ import { supabase } from '@/db/supabase';
 import { readQuery } from '@/lib/queryCache';
 
 export type PlanStatus = 'planned' | 'in_progress' | 'done' | 'skipped';
-export type LoadType = 'total' | 'per_dumbbell';
+/**
+ * How target_weight_kg reads: the total load, one dumbbell of a pair, or the load added
+ * on top of body weight (null = body weight only).
+ */
+export type LoadType = 'total' | 'per_dumbbell' | 'bodyweight';
+/** Whether a set is counted in reps or held for seconds. */
+export type Measure = 'reps' | 'time';
+
+/** Reps or seconds: a timed set has null reps and a seconds range. */
+export interface SetTargetRange {
+  target_reps_min: number | null;
+  target_reps_max: number | null;
+  target_duration_sec_min?: number | null;
+  target_duration_sec_max?: number | null;
+}
 
 export interface CardioTarget {
   target_duration_min: number | null;
@@ -15,7 +29,9 @@ export interface CardioTarget {
 export interface PlannedLoad extends CardioTarget {
   is_cardio: boolean;
   load_type: LoadType;
-  sets: { target_reps_min: number; target_reps_max: number; target_weight_kg: number | null }[];
+  /** Missing on rows read before migration 019; treated as 'reps'. */
+  measure?: Measure;
+  sets: (SetTargetRange & { target_weight_kg: number | null })[];
 }
 
 export interface PlanSummary {
@@ -30,12 +46,10 @@ export interface PlanSummary {
   planned: PlannedLoad[];
 }
 
-export interface PlanSet {
+export interface PlanSet extends SetTargetRange {
   id: string;
   set_number: number;
   set_type: 'warmup' | 'top' | 'backoff' | 'straight';
-  target_reps_min: number;
-  target_reps_max: number;
   target_weight_kg: number | null;
   target_rir_min: number | null;
   target_rir_max: number | null;
@@ -52,6 +66,8 @@ export interface PlanExercise extends CardioTarget {
   note: string | null;
   is_cardio: boolean;
   load_type: LoadType;
+  /** Missing on rows read before migration 019; treated as 'reps'. */
+  measure?: Measure;
   sets: PlanSet[];
 }
 
@@ -70,22 +86,32 @@ export interface Guidance {
   license: string | null;
 }
 
-export interface ComparedSet {
+/** A logged set. weight is the total load; the other fields split it or time it. */
+export interface ActualSet {
+  reps: number | null;
+  weight: number | null;
+  rpe: number | null;
+  added_weight_kg?: number | null;
+  bodyweight_kg?: number | null;
+  duration_sec?: number | null;
+}
+
+export interface ComparedSet extends SetTargetRange {
   id: string;
   set_number: number;
   set_type: PlanSet['set_type'];
-  target_reps_min: number;
-  target_reps_max: number;
   target_weight_kg: number | null;
   target_rir_min: number | null;
   target_rir_max: number | null;
-  actual: { reps: number; weight: number | null; rpe: number | null } | null;
+  actual: ActualSet | null;
 }
 
 export interface ComparedExercise {
   name: string;
   position: number;
   load_type: LoadType;
+  /** Missing on rows read before migration 019; treated as 'reps'. */
+  measure?: Measure;
   sets: ComparedSet[];
   cardio: (CardioTarget & {
     label: string | null;
@@ -117,7 +143,7 @@ interface RawExercise {
   target_incline_pct?: unknown;
   target_speed_kmh?: unknown;
   target_kcal?: unknown;
-  exercise?: { name?: string; category?: string | null; load_type?: string | null } | null;
+  exercise?: { name?: string; category?: string | null; load_type?: string | null; measure?: string | null } | null;
   plan_sets?: Array<Record<string, unknown>> | null;
 }
 
@@ -135,7 +161,21 @@ function isCardio(exercise: RawExercise) {
 }
 
 function loadType(exercise: RawExercise): LoadType {
-  return exercise.exercise?.load_type === 'per_dumbbell' ? 'per_dumbbell' : 'total';
+  const value = exercise.exercise?.load_type;
+  return value === 'per_dumbbell' || value === 'bodyweight' ? value : 'total';
+}
+
+function measure(exercise: RawExercise): Measure {
+  return exercise.exercise?.measure === 'time' ? 'time' : 'reps';
+}
+
+function targetRange(set: Record<string, unknown>): SetTargetRange {
+  return {
+    target_reps_min: asNumber(set.target_reps_min),
+    target_reps_max: asNumber(set.target_reps_max),
+    target_duration_sec_min: asNumber(set.target_duration_sec_min),
+    target_duration_sec_max: asNumber(set.target_duration_sec_max),
+  };
 }
 
 /** Cardio items always come last, whatever position the coach gave them. */
@@ -166,9 +206,9 @@ function mapSummary(row: {
       ...cardioTarget(exercise),
       is_cardio: isCardio(exercise),
       load_type: loadType(exercise),
+      measure: measure(exercise),
       sets: (exercise.plan_sets ?? []).map(set => ({
-        target_reps_min: Number(set.target_reps_min),
-        target_reps_max: Number(set.target_reps_max),
+        ...targetRange(set),
         target_weight_kg: asNumber(set.target_weight_kg),
       })),
     })),
@@ -182,8 +222,8 @@ async function loadPlans(): Promise<PlanSummary[]> {
       id, plan_date, day_type, title, notes, status, activity_id,
       plan_exercises (
         id, target_duration_min, target_incline_pct, target_speed_kmh, target_kcal,
-        exercise:exercises (category, load_type),
-        plan_sets (target_reps_min, target_reps_max, target_weight_kg)
+        exercise:exercises (category, load_type, measure),
+        plan_sets (target_reps_min, target_reps_max, target_duration_sec_min, target_duration_sec_max, target_weight_kg)
       )
     `)
     .order('plan_date', { ascending: true });
@@ -206,6 +246,7 @@ function mapPlan(row: Record<string, unknown>): WorkoutPlan {
       ...cardioTarget(exercise),
       is_cardio: isCardio(exercise),
       load_type: loadType(exercise),
+      measure: measure(exercise),
       sets: (exercise.plan_sets ?? [])
         .slice()
         .sort((a, b) => Number(a.set_number) - Number(b.set_number))
@@ -213,8 +254,7 @@ function mapPlan(row: Record<string, unknown>): WorkoutPlan {
           id: String(set.id),
           set_number: Number(set.set_number),
           set_type: set.set_type as PlanSet['set_type'],
-          target_reps_min: Number(set.target_reps_min),
-          target_reps_max: Number(set.target_reps_max),
+          ...targetRange(set),
           target_weight_kg: asNumber(set.target_weight_kg),
           target_rir_min: asNumber(set.target_rir_min),
           target_rir_max: asNumber(set.target_rir_max),
@@ -233,9 +273,10 @@ const PLAN_COLUMNS = `
   plan_exercises (
     id, position, exercise_id, superset_group, note,
     target_duration_min, target_incline_pct, target_speed_kmh, target_kcal,
-    exercise:exercises (name, category, load_type),
+    exercise:exercises (name, category, load_type, measure),
     plan_sets (
       id, set_number, set_type, target_reps_min, target_reps_max,
+      target_duration_sec_min, target_duration_sec_max,
       target_weight_kg, target_rir_min, target_rir_max, rest_seconds, note
     )
   )
@@ -290,12 +331,13 @@ export const plansService = {
         day_type, plan_date,
         plan_exercises (
           position, note, target_duration_min, target_incline_pct, target_speed_kmh, target_kcal,
-          exercise:exercises (name, category, load_type),
+          exercise:exercises (name, category, load_type, measure),
           cardio_entries (activity_id, duration_minutes, calories, label),
           plan_sets (
             id, set_number, set_type, target_reps_min, target_reps_max,
+            target_duration_sec_min, target_duration_sec_max,
             target_weight_kg, target_rir_min, target_rir_max,
-            strength_sets (activity_id, reps, weight, rpe)
+            strength_sets (activity_id, reps, weight, rpe, added_weight_kg, bodyweight_kg, duration_sec)
           )
         )
       `)
@@ -324,6 +366,7 @@ export const plansService = {
           name: exercise.exercise?.name ?? 'Exercise',
           position: exercise.position,
           load_type: loadType(exercise),
+          measure: measure(exercise),
           cardio: exercise.is_cardio ? (() => {
             const actual = (exercise.cardio_entries ?? []).find(entry => entry.activity_id === activityId) ?? null;
             return {
@@ -336,18 +379,24 @@ export const plansService = {
             .slice()
             .sort((a, b) => Number(a.set_number) - Number(b.set_number))
             .map(set => {
-              const actuals = (set.strength_sets as Array<{ activity_id: string; reps: number; weight: number | null; rpe: number | null }> | null) ?? [];
+              const actuals = (set.strength_sets as Array<Record<string, unknown> & { activity_id: string }> | null) ?? [];
               const actual = actuals.find(item => item.activity_id === activityId);
               return {
                 id: String(set.id),
                 set_number: Number(set.set_number),
                 set_type: set.set_type as ComparedSet['set_type'],
-                target_reps_min: Number(set.target_reps_min),
-                target_reps_max: Number(set.target_reps_max),
+                ...targetRange(set),
                 target_weight_kg: asNumber(set.target_weight_kg),
                 target_rir_min: asNumber(set.target_rir_min),
                 target_rir_max: asNumber(set.target_rir_max),
-                actual: actual ? { reps: Number(actual.reps), weight: asNumber(actual.weight), rpe: asNumber(actual.rpe) } : null,
+                actual: actual ? {
+                  reps: asNumber(actual.reps),
+                  weight: asNumber(actual.weight),
+                  rpe: asNumber(actual.rpe),
+                  added_weight_kg: asNumber(actual.added_weight_kg),
+                  bodyweight_kg: asNumber(actual.bodyweight_kg),
+                  duration_sec: asNumber(actual.duration_sec),
+                } : null,
               };
             }),
         })),

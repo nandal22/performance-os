@@ -327,6 +327,27 @@ try {
   const resumedText = await evalIn(page, `document.querySelector('[data-testid="sync-status"]')?.textContent ?? ''`);
   record('a resumed plan session shows its logged sets', /2 logged/.test(resumedText), resumedText);
 
+  await gotoReady(page, `${BASE}/__shot?shot=plan-bwtimed`, '[data-testid="bw-load"]');
+  await evalIn(page, paintStatusBar(TOP));
+  await evalIn(page, `document.querySelector('[aria-label="Dips set 1 added weight"]')?.closest('[data-testid="plan-set-row"]')?.scrollIntoView({ block: 'center' })`);
+  await delay(150);
+  const planBw = await shot(page, 'plan-bw-set.png');
+  const bwState = await evalIn(page, `JSON.stringify({ loads: [...document.querySelectorAll('[data-testid="bw-load"]')].map(n => n.textContent.trim()), mode: document.querySelector('[aria-label="Dips set 1 added weight"]')?.inputMode ?? null })`);
+  const bw = JSON.parse(bwState);
+  record('a BW + kg set shows "BW + 15 kg" with a decimal keypad', bw.loads.includes('BW + 15 kg') && bw.loads.includes('BW') && bw.mode === 'decimal', bwState);
+  await evalIn(page, `document.querySelector('[aria-label="Plank set 1 seconds"]')?.closest('[data-testid="plan-set-row"]')?.scrollIntoView({ block: 'center' })`);
+  await delay(150);
+  const planTimed = await shot(page, 'plan-timed-set.png');
+  const timedState = await evalIn(page, `JSON.stringify({ mode: document.querySelector('[aria-label="Plank set 2 seconds"]')?.inputMode ?? null, logged: document.querySelector('[aria-label="Plank set 1 seconds"]')?.value ?? null, reps: document.querySelectorAll('[aria-label^="Plank set"][aria-label$="reps"]').length })`);
+  const timed = JSON.parse(timedState);
+  record('a timed set takes seconds on a numeric keypad, no reps', timed.mode === 'numeric' && timed.logged === '52' && timed.reps === 0, timedState);
+  const smallBw = await evalIn(page, `JSON.stringify([...document.querySelectorAll('[data-testid="plan-set-row"] button, [data-testid="plan-set-row"] input')]
+    .filter(el => el.offsetParent !== null)
+    .map(el => ({ name: el.getAttribute('aria-label') || el.textContent.trim(), h: Math.round(el.getBoundingClientRect().height), w: Math.round(el.getBoundingClientRect().width) }))
+    .filter(el => el.h < 44 || el.w < 44))`);
+  record('BW and timed set controls are at least 44px', smallBw === '[]', smallBw);
+  console.log(`      bodyweight/timed screenshots ${planBw} ${planTimed}`);
+
   await gotoReady(page, `${BASE}/__shot?shot=plan-actual`, '[aria-label="Planned versus actual"]');
   await evalIn(page, paintStatusBar(TOP));
   await delay(100);
