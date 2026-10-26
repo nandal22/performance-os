@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import TodayPlanCard from './TodayPlanCard';
 import type { PlanSummary } from '@/services/plans';
+import { rememberEnded } from '@/lib/workoutSession';
 
 afterEach(() => cleanup());
 
@@ -61,5 +62,44 @@ describe('TodayPlanCard', () => {
     await user.click(screen.getByRole('button', { name: 'View' }));
     expect(onView).toHaveBeenCalledOnce();
     expect(onStart).not.toHaveBeenCalled();
+  });
+
+  it('offers Continue only while the workout is still in progress', () => {
+    render(<TodayPlanCard plan={{ ...plan, status: 'in_progress', activity_id: 'plan-1' }} onStart={() => undefined} onBrowse={() => undefined} />);
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Start' })).toBeNull();
+  });
+
+  it('does not offer Continue or Start after the plan is done', () => {
+    const onStart = vi.fn();
+    render(
+      <TodayPlanCard
+        plan={{ ...plan, status: 'done', activity_id: 'plan-1' }}
+        onStart={onStart}
+        onView={() => undefined}
+        onBrowse={() => undefined}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Start' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'View' })).toBeTruthy();
+    expect(screen.getByText(/2026-10-19 · done/)).toBeTruthy();
+    expect(onStart).not.toHaveBeenCalled();
+  });
+
+  it('hides Continue when this phone already finished, even if the list still says in progress', () => {
+    rememberEnded('plan-1');
+    render(
+      <TodayPlanCard
+        plan={{ ...plan, status: 'in_progress', activity_id: 'plan-1' }}
+        onStart={() => undefined}
+        onView={() => undefined}
+        onBrowse={() => undefined}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Start' })).toBeNull();
+    expect(screen.getByText(/2026-10-19 · done/)).toBeTruthy();
+    localStorage.clear();
   });
 });

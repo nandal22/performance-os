@@ -1,10 +1,10 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   addedLoadOf, bodyweightLabel, cardioTargetCalories, cardioTargetLabel, estimatePlanCalories, isTimedTarget, loggedWeightFor,
   perDumbbell, prefillFromTarget, repsLabel, targetWeightLabel,
 } from '@/lib/planMath';
 import { strengthSessionMetrics } from '@/lib/sessionMetrics';
-import { newId, type SessionSet, type WorkoutSession } from '@/lib/workoutSession';
+import { clearSession, newId, planActivityId, wasEnded, type SessionSet, type WorkoutSession } from '@/lib/workoutSession';
 import { useSyncStatus } from '@/hooks/useSyncStatus';
 import { bodyMetricsService } from '@/services/bodyMetrics';
 import { exercisesService } from '@/services/exercises';
@@ -91,6 +91,21 @@ function sameDraft(a: Draft, b: Draft) {
   return a.reps === b.reps && a.weight === b.weight && a.rpe === b.rpe && a.seconds === b.seconds;
 }
 
+function cardioSkipKey(planExerciseId: string) {
+  return `cardio:${planExerciseId}`;
+}
+
+function SyncLine({ activityId, loggedCount }: { activityId: string; loggedCount: number }) {
+  const sync = useSyncStatus(activityId);
+  return (
+    <p data-testid="sync-status" className="text-[11px] font-800" style={{ color: sync.pending > 0 ? ACCENT_DEEP : MUTED }}>
+      {sync.pending > 0
+        ? `${sync.pending} change${sync.pending === 1 ? '' : 's'} waiting to sync${typeof navigator !== 'undefined' && navigator.onLine === false ? ' · offline' : ''}`
+        : `${loggedCount} logged · saved`}
+    </p>
+  );
+}
+
 function buildGroups(plan: WorkoutPlan, session: WorkoutSession | null): Group[] {
   const groups = new Map<string, Group>();
   const group = (exerciseId: string, name: string, loadType: LoadType, measure: Measure) => {
@@ -160,7 +175,8 @@ export default function PlanLogSheet({
   autoStart?: boolean;
   bodyWeightKg?: number | null;
 }) {
-  const [session, setSession] = useState<WorkoutSession | null>(() => sessionStore.read(plan.id));
+  const closed = plan.status === 'done' || plan.status === 'skipped' || wasEnded(planActivityId(plan));
+  const [session, setSession] = useState<WorkoutSession | null>(() => (closed ? null : sessionStore.read(plan.id)));
   const sessionRef = useRef(session);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [cardioDrafts, setCardioDrafts] = useState<Record<string, CardioDraft>>({});
@@ -171,11 +187,13 @@ export default function PlanLogSheet({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [exerciseQuery, setExerciseQuery] = useState('');
   const [exerciseChoices, setExerciseChoices] = useState<{ id: string; name: string }[]>([]);
-  const sync = useSyncStatus(session?.activityId ?? null);
-  const readOnly = !session && (plan.status === 'done' || plan.status === 'skipped');
+  // A finished plan never opens the logger, even if this phone still has a copy or the list still says in progress.
+  const readOnly = closed;
   // A planned workout opened without Start: read it, write nothing until Start is tapped.
-  const [starting, setStarting] = useState(autoStart || plan.status === 'in_progress');
-  const viewOnly = !session && !readOnly && !starting;
+  const [starting, setStarting] = useState(!closed && (autoStart || plan.status === 'in_progress'));
+  const viewOnly = closed || (!session && !starting);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const scrollTopRef = useRef(0);
 
   const lastTap = useRef<Record<string, number>>({});
   const isDoubleTap = (key: string) => {
@@ -191,6 +209,7 @@ export default function PlanLogSheet({
   };
 
   const ensureSession = () => {
+    if (plan.status === 'done' || plan.status === 'skipped' || wasEnded(planActivityId(plan))) return null;
     if (sessionRef.current) return sessionRef.current;
     const started = sessionStore.begin({
       activityId: plan.activity_id ?? plan.id,
@@ -212,17 +231,23 @@ export default function PlanLogSheet({
   }, [knownBodyWeightKg]);
 
   useEffect(() => {
+    if (closed) {
+      clearSession(plan.id);
+      return;
+    }
     if (sessionRef.current) return;
     let cancelled = false;
     const resume = async () => {
-      if (plan.status === 'in_progress' && plan.activity_id) {
+      if (wasEnded(planActivityId(plan))) return;
+      if (plan.status === 'in_progress' && plan.activity_id && !wasEnded(plan.activity_id)) {
         const remote = await sessionsService.load(plan.activity_id, plan.id).catch(() => null);
-        if (cancelled || sessionRef.current) return;
-        if (remote) {
+        if (cancelled || sessionRef.current || wasEnded(planActivityId(plan))) return;
+        if (remote && !wasEnded(remote.activityId)) {
           commit(sessionStore.adopt(remote));
           return;
         }
       }
+      if (cancelled || wasEnded(planActivityId(plan))) return;
       if (autoStart || plan.status === 'in_progress') ensureSession();
       else setStarting(false);
     };
@@ -230,7 +255,15 @@ export default function PlanLogSheet({
     return () => { cancelled = true; };
     // Runs once per plan; ensureSession reads the ref.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan.id]);
+  }, [plan.id, closed]);
+
+  // A set save re-renders the sheet. iOS sometimes resets the scroller to the top,
+  // which looks like the workout loaded again. Only correct that jump; a later
+  // scrollIntoView to the next set is left alone.
+  useLayoutEffect(() => {
+    const node = scrollerRef.current;
+    if (node && node.scrollTop === 0 && scrollTopRef.current > 0) node.scrollTop = scrollTopRef.current;
+  });
 
   const groups = useMemo(() => buildGroups(plan, session), [plan, session]);
   const cardioItems = plan.exercises.filter(exercise => exercise.is_cardio);
@@ -274,6 +307,7 @@ export default function PlanLogSheet({
       return;
     }
     let current = ensureSession();
+    if (!current) return;
     if (current.skipped.includes(row.key)) current = sessionStore.patch(current, { skipped: current.skipped.filter(key => key !== row.key) });
     const set: SessionSet = {
       id: row.logged?.id ?? (row.planSetId ? newId() : row.key),
@@ -298,8 +332,23 @@ export default function PlanLogSheet({
       } : {}),
     };
     if (timer?.key === row.key) setTimer(null);
+    const wasNew = !row.logged;
     commit(sessionStore.saveSet(current, set));
-    setDrafts(current => withoutKey(current, row.key));
+    setDrafts(currentDrafts => withoutKey(currentDrafts, row.key));
+    if (!wasNew) return;
+    const rows = groups.flatMap(group => group.rows);
+    const index = rows.findIndex(item => item.key === row.key);
+    const next = rows.slice(index + 1).find(item => !item.logged && !current.skipped.includes(item.key));
+    if (!next) return;
+    const label = next.timed ? `${next.exerciseName} set ${next.setNumber} seconds` : `${next.exerciseName} set ${next.setNumber} reps`;
+    requestAnimationFrame(() => {
+      const field = document.querySelector<HTMLInputElement>(`[aria-label="${label.replace(/"/g, '\\"')}"]`);
+      field?.focus();
+      if (typeof field?.scrollIntoView === 'function') field.scrollIntoView({ block: 'center' });
+      requestAnimationFrame(() => {
+        if (scrollerRef.current) scrollTopRef.current = scrollerRef.current.scrollTop;
+      });
+    });
   };
 
   function deleteRow(row: Row) {
@@ -311,6 +360,7 @@ export default function PlanLogSheet({
   const toggleSkip = (row: Row) => {
     if (isDoubleTap(`skip:${row.key}`)) return;
     const current = ensureSession();
+    if (!current) return;
     const skipped = current.skipped.includes(row.key)
       ? current.skipped.filter(key => key !== row.key)
       : [...current.skipped, row.key];
@@ -319,6 +369,7 @@ export default function PlanLogSheet({
 
   const addExtra = (exerciseId: string, name: string) => {
     const current = ensureSession();
+    if (!current) return;
     commit(sessionStore.patch(current, { extras: [...current.extras, { id: newId(), exercise_id: exerciseId, exercise_name: name }] }));
   };
 
@@ -367,7 +418,10 @@ export default function PlanLogSheet({
       toast.error('Enter a cardio type');
       return;
     }
-    const current = ensureSession();
+    let current = ensureSession();
+    if (!current) return;
+    const skipKey = cardioSkipKey(exercise.id);
+    if (current.skipped.includes(skipKey)) current = sessionStore.patch(current, { skipped: current.skipped.filter(key => key !== skipKey) });
     const logged = current.cardio.find(entry => entry.plan_exercise_id === exercise.id);
     commit(sessionStore.saveCardio(current, {
       id: logged?.id ?? newId(),
@@ -380,6 +434,17 @@ export default function PlanLogSheet({
       plan_exercise_id: exercise.id,
     }));
     setCardioDrafts(current => withoutKey(current, exercise.id));
+  };
+
+  const toggleCardioSkip = (exercise: PlanExercise) => {
+    const key = cardioSkipKey(exercise.id);
+    if (isDoubleTap(`skip:${key}`)) return;
+    const current = ensureSession();
+    if (!current) return;
+    const skipped = current.skipped.includes(key)
+      ? current.skipped.filter(item => item !== key)
+      : [...current.skipped, key];
+    commit(sessionStore.patch(current, { skipped }));
   };
 
   const deleteCardio = (exercise: PlanExercise) => {
@@ -421,6 +486,7 @@ export default function PlanLogSheet({
   const loggedCount = (session?.sets.length ?? 0) + (session?.cardio.length ?? 0);
 
   const start = () => {
+    if (closed) return;
     setStarting(true);
     ensureSession();
   };
@@ -434,13 +500,17 @@ export default function PlanLogSheet({
           <div data-testid="sheet-header" className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `2px solid ${INK}` }}>
             <div className="min-w-0">
               <p className="text-[10px] font-800 uppercase tracking-[0.1em]" style={{ color: MUTED }}>
-                {plan.plan_date}{session ? ' · in progress' : viewOnly ? ' · view only' : ''}
+                {plan.plan_date}{closed ? (plan.status === 'skipped' ? ' · skipped' : ' · done') : session ? ' · in progress' : viewOnly ? ' · view only' : ''}
               </p>
               <h2 className="text-base font-800">{plan.day_type}</h2>
             </div>
             <button type="button" aria-label="Close workout" onClick={onClose} className="min-h-11 min-w-11 text-sm font-800">Close</button>
           </div>
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+          <div
+            ref={scrollerRef}
+            onScroll={event => { scrollTopRef.current = event.currentTarget.scrollTop; }}
+            className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
+          >
             <div data-testid="plan-calories" className="flex items-center justify-between gap-3 p-3" style={{ border: `2px solid ${ACCENT}`, background: ACCENT_TINT }}>
               <div className="min-w-0">
                 <p className="text-[10px] font-800 uppercase tracking-[0.1em]" style={{ color: ACCENT_DEEP }}>Burn estimate</p>
@@ -455,16 +525,12 @@ export default function PlanLogSheet({
                 )}
               </div>
             </div>
-            {session && (
-              <p data-testid="sync-status" className="text-[11px] font-800" style={{ color: sync.pending > 0 ? ACCENT_DEEP : MUTED }}>
-                {sync.pending > 0
-                  ? `${sync.pending} change${sync.pending === 1 ? '' : 's'} waiting to sync${typeof navigator !== 'undefined' && navigator.onLine === false ? ' · offline' : ''}`
-                  : `${loggedCount} logged · saved`}
-              </p>
-            )}
-            {readOnly && (
+            {session && !closed && <SyncLine activityId={session.activityId} loggedCount={loggedCount} />}
+            {closed && (
               <p className="text-sm font-800 p-3" style={{ border: `2px solid ${INK}`, background: PANEL }}>
-                This plan is {plan.status}. Its session is in your workout history.
+                {plan.status === 'skipped'
+                  ? 'This plan is skipped. Its session is in your workout history.'
+                  : 'This workout is finished. Logged sets are in your history.'}
               </p>
             )}
             {groups.map(group => (
@@ -517,6 +583,7 @@ export default function PlanLogSheet({
                               aria-label={`${row.exerciseName} set ${row.setNumber} seconds`}
                               inputMode="numeric"
                               pattern="[0-9]*"
+                              enterKeyHint="next"
                               value={running && timer ? String(timerSeconds(timer.startedAt)) : value.seconds}
                               disabled={readOnly || running}
                               onChange={event => updateDraft(row, { seconds: event.target.value })}
@@ -549,6 +616,8 @@ export default function PlanLogSheet({
                             <input
                               aria-label={`${row.exerciseName} set ${row.setNumber} reps`}
                               inputMode="numeric"
+                              pattern="[0-9]*"
+                              enterKeyHint="next"
                               value={value.reps}
                               disabled={readOnly}
                               onChange={event => updateDraft(row, { reps: event.target.value })}
@@ -651,11 +720,12 @@ export default function PlanLogSheet({
             {cardioItems.map(exercise => {
               const value = cardioValue(exercise);
               const logged = session?.cardio.find(entry => entry.plan_exercise_id === exercise.id);
+              const skipped = session?.skipped.includes(cardioSkipKey(exercise.id)) ?? false;
               const changed = logged
                 ? value.label !== logged.label || value.minutes !== String(logged.minutes) || value.kcal !== (logged.calories == null ? '' : String(logged.calories))
                 : false;
               return (
-                <section key={exercise.id} data-testid="plan-cardio" style={{ border: `2px solid ${INK}` }}>
+                <section key={exercise.id} data-testid="plan-cardio" data-state={logged ? 'logged' : skipped ? 'skipped' : 'pending'} style={{ border: `2px solid ${INK}`, opacity: skipped ? 0.7 : 1 }}>
                   <div className="flex items-center justify-between px-3 py-2" style={{ background: INK, color: GROUND }}>
                     <p className="text-xs font-800">{exercise.note || exercise.exercise_name}</p>
                     <p className="text-[11px] font-800 uppercase">Cardio</p>
@@ -665,13 +735,16 @@ export default function PlanLogSheet({
                     {viewOnly && value.kcal !== '' && exercise.target_kcal == null && (
                       <p className="text-[11px] nums" style={{ color: MUTED }}>≈ {value.kcal} kcal est.</p>
                     )}
+                    {skipped && (
+                      <p className="text-[11px] font-800">Skipped. Finishing still completes this workout.</p>
+                    )}
                     {!viewOnly && <>
                     <label className="block text-[10px] font-800 uppercase" style={{ color: MUTED }}>
                       Type
                       <input
                         aria-label="Plan cardio type"
                         value={value.label}
-                        disabled={readOnly}
+                        disabled={readOnly || skipped}
                         onChange={event => setCardioDrafts(current => ({ ...current, [exercise.id]: { ...value, label: event.target.value } }))}
                         className="mt-1 w-full min-h-11 px-2 text-sm"
                         style={inputStyle}
@@ -682,9 +755,10 @@ export default function PlanLogSheet({
                         Minutes
                         <input
                           aria-label="Plan cardio minutes"
-                          inputMode="decimal"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           value={value.minutes}
-                          disabled={readOnly}
+                          disabled={readOnly || skipped}
                           onChange={event => setCardioDrafts(current => ({ ...current, [exercise.id]: { ...value, minutes: event.target.value } }))}
                           className="mt-1 w-full min-h-11 px-2 text-sm nums"
                           style={inputStyle}
@@ -695,8 +769,9 @@ export default function PlanLogSheet({
                         <input
                           aria-label="Plan cardio calories"
                           inputMode="numeric"
+                          pattern="[0-9]*"
                           value={value.kcal}
-                          disabled={readOnly}
+                          disabled={readOnly || skipped}
                           onChange={event => setCardioDrafts(current => ({ ...current, [exercise.id]: { ...value, kcal: event.target.value } }))}
                           className="mt-1 w-full min-h-11 px-2 text-sm nums"
                           style={inputStyle}
@@ -708,12 +783,13 @@ export default function PlanLogSheet({
                         <button
                           type="button"
                           onClick={() => logCardio(exercise)}
-                          className="min-h-11 flex-1 text-sm font-800"
+                          disabled={skipped}
+                          className="min-h-11 flex-1 text-sm font-800 disabled:opacity-40"
                           style={{ background: logged && !changed ? INK : ACCENT, color: GROUND, border: `2px solid ${INK}` }}
                         >
                           {!logged ? 'Log cardio' : changed ? 'Update cardio' : 'Logged cardio'}
                         </button>
-                        {logged && (
+                        {logged ? (
                           <button
                             type="button"
                             aria-label={`Delete ${exercise.exercise_name}`}
@@ -722,6 +798,17 @@ export default function PlanLogSheet({
                             style={{ border: `2px solid ${INK}`, color: ACCENT_DEEP }}
                           >
                             Delete
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            aria-pressed={skipped}
+                            aria-label={skipped ? 'Skipped cardio, tap to undo' : 'Skip cardio'}
+                            onClick={() => toggleCardioSkip(exercise)}
+                            className="min-h-11 px-3 text-sm font-800"
+                            style={{ border: `2px solid ${INK}`, background: skipped ? INK : GROUND, color: skipped ? GROUND : INK }}
+                          >
+                            {skipped ? '✓ Skipped · undo' : 'Skip cardio'}
                           </button>
                         )}
                       </div>
@@ -759,7 +846,7 @@ export default function PlanLogSheet({
               </div>
             )}
           </div>
-          {viewOnly && (
+          {viewOnly && !closed && (
             <div className="px-4 pt-3" style={{ borderTop: `2px solid ${INK}`, paddingBottom: 'max(0.75rem, var(--sab))' }}>
               <button type="button" onClick={start} className="w-full min-h-11 text-sm font-800" style={{ background: ACCENT, color: GROUND, border: `2px solid ${INK}` }}>
                 Start workout

@@ -1,8 +1,8 @@
 import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetSessions, server, network, syncQueue } from '@/test/mockSessions';
-import { sessionStorageKey } from '@/lib/workoutSession';
+import { resetSessions, server, network, sessionStore, syncQueue } from '@/test/mockSessions';
+import { sessionStorageKey, wasEnded, type WorkoutSession } from '@/lib/workoutSession';
 
 vi.mock('@/services/sessions', () => import('@/test/mockSessions'));
 
@@ -165,6 +165,29 @@ describe('LogWorkoutSheet persistence', () => {
     expect(server.state.activities.get(activityId)?.status).toBe('done');
     expect(server.state.sets.get(sets[1].id)?.set_number).toBe(1);
     expect(localStorage.getItem(sessionStorageKey(null))).toBeNull();
+    expect(wasEnded(activityId)).toBe(true);
+  });
+
+  it('does not resume logging when a finished workout is still in local storage', async () => {
+    const user = userEvent.setup();
+    const first = render(<LogWorkoutSheet open onClose={() => undefined} onSuccess={() => undefined} initialExerciseName="Bench Press" />);
+    await settle();
+    await user.click(screen.getByRole('button', { name: /^Total kg/ }));
+    await logBench(user, '5', '80');
+    await settle();
+    const activityId = [...server.state.sets.values()][0].activity_id;
+    const saved = JSON.parse(localStorage.getItem(sessionStorageKey(null)) ?? 'null') as WorkoutSession;
+    await user.click(screen.getByRole('button', { name: /Finish Workout/ }));
+    await settle();
+    first.unmount();
+
+    sessionStore.adopt(saved);
+    render(<LogWorkoutSheet open onClose={() => undefined} onSuccess={() => undefined} />);
+    expect(screen.getByRole('heading', { name: 'Active Workout' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Workout in progress' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Delete Bench Press/ })).toBeNull();
+    expect(localStorage.getItem(sessionStorageKey(null))).toBeNull();
+    expect(wasEnded(activityId)).toBe(true);
   });
 
   it('queues sets while offline and keeps them through a reload', async () => {

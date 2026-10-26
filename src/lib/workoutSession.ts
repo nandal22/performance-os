@@ -63,7 +63,36 @@ export interface WorkoutSession {
 }
 
 const PREFIX = 'perf-os-session:';
+const ENDED_PREFIX = 'perf-os-ended:';
 const MAX_AGE_MS = 3 * 86_400_000;
+
+/** The id a plan session is started with: the linked activity, or the plan id before one exists. */
+export function planActivityId(plan: { id: string; activity_id: string | null }) {
+  return plan.activity_id ?? plan.id;
+}
+
+/** Remember a session that was finished on this device, so a stale in-progress read cannot resume it. */
+export function rememberEnded(activityId: string, storage: Storage = localStorage) {
+  storage.setItem(`${ENDED_PREFIX}${activityId}`, String(Date.now()));
+}
+
+export function wasEnded(activityId: string, storage: Storage = localStorage) {
+  const raw = storage.getItem(`${ENDED_PREFIX}${activityId}`);
+  if (!raw) return false;
+  const at = Number(raw);
+  if (!Number.isFinite(at) || Date.now() - at > MAX_AGE_MS) {
+    storage.removeItem(`${ENDED_PREFIX}${activityId}`);
+    return false;
+  }
+  return true;
+}
+
+/** Whether the home card should offer Start, Continue, or neither. */
+export function planLogAction(plan: { id: string; status: string; activity_id: string | null }): 'start' | 'continue' | 'closed' {
+  if (plan.status === 'done' || plan.status === 'skipped' || wasEnded(planActivityId(plan))) return 'closed';
+  if (plan.status === 'in_progress') return 'continue';
+  return plan.status === 'planned' ? 'start' : 'closed';
+}
 
 export function sessionStorageKey(planId: string | null) {
   return `${PREFIX}${planId ? `plan:${planId}` : 'free'}`;
@@ -241,6 +270,9 @@ export function createSessionStore(queue: SyncQueue, storage: Storage = localSto
         structuredMetrics: summary.structuredMetrics,
         planId: session.planId,
       }));
+      // Recorded before the local copy is dropped, so a refresh that still says
+      // in_progress cannot offer Continue or open the logger again.
+      rememberEnded(session.activityId, storage);
       clearSession(session.planId, storage);
     },
 

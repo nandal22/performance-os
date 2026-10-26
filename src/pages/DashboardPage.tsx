@@ -11,7 +11,8 @@ import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
 import TodayPlanCard from '@/components/TodayPlanCard';
 import { plansService, type PlanSummary, type WorkoutPlan } from '@/services/plans';
 import { sessionStore, sessionsService, syncQueue } from '@/services/sessions';
-import type { WorkoutSession } from '@/lib/workoutSession';
+import { clearSession, planLogAction, wasEnded, type WorkoutSession } from '@/lib/workoutSession';
+import { invalidateQueries } from '@/lib/queryCache';
 
 const LogWorkoutSheet = lazy(() => import('@/components/LogWorkoutSheet'));
 const PlanLogSheet = lazy(() => import('@/components/PlanLogSheet'));
@@ -29,6 +30,21 @@ const MODERNIST = {
 };
 
 const LEGACY_DRAFT_KEY = 'perf-os-draft';
+
+function SheetFallback() {
+  return (
+    <div className="sheet-overlay z-50" aria-busy="true" aria-label="Opening workout">
+      <div className="sheet-safe-bar" aria-hidden="true" />
+      <div className="sheet-stage">
+        <div className="sheet-panel relative max-w-lg mx-auto" style={{ background: MODERNIST.ground, color: MODERNIST.ink, border: `2px solid ${MODERNIST.ink}` }}>
+          <div className="px-4 py-3" style={{ borderBottom: `2px solid ${MODERNIST.ink}` }}>
+            <p className="text-base font-800">Opening workout</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function hasLegacyDraft() {
   try {
@@ -76,7 +92,10 @@ export default function DashboardPage() {
   const [loading,          setLoading]          = useState(true);
   const [showSheet,        setShowSheet]        = useState(false);
   const [selectedId,       setSelectedId]       = useState<string | null>(null);
-  const [freeSession,      setFreeSession]      = useState<WorkoutSession | null>(() => sessionStore.read(null));
+  const [freeSession, setFreeSession] = useState<WorkoutSession | null>(() => {
+    const existing = sessionStore.read(null);
+    return existing && !wasEnded(existing.activityId) ? existing : null;
+  });
   const [legacyDraft,      setLegacyDraft]      = useState(hasLegacyDraft);
   const [selectedDay,      setSelectedDay]      = useState<string | null>(null);
   const [plans,            setPlans]            = useState<PlanSummary[]>([]);
@@ -102,17 +121,23 @@ export default function DashboardPage() {
   useEffect(() => { load(); }, [load]);
 
   // Resume an unfinished workout started on another device, or one whose local copy was cleared.
+  // A finish that already happened on this phone is ignored, even if the read raced ahead of it.
   useEffect(() => {
+    const existing = sessionStore.read(null);
+    if (existing && wasEnded(existing.activityId)) clearSession(null);
     void syncQueue.flush();
-    if (sessionStore.read(null)) return;
+    if (existing && !wasEnded(existing.activityId)) return;
     void sessionsService.findFree().then(remote => {
-      if (remote && !sessionStore.read(null)) setFreeSession(sessionStore.adopt(remote));
+      if (!remote || sessionStore.read(null) || wasEnded(remote.activityId)) return;
+      setFreeSession(sessionStore.adopt(remote));
     });
   }, []);
 
   const refreshPlans = useCallback(async () => {
     const today = new Date().toISOString().slice(0, 10);
-    const next = await plansService.list();
+    const next = (await plansService.list()).map(plan =>
+      plan.status !== 'skipped' && planLogAction(plan) === 'closed' ? { ...plan, status: 'done' as const } : plan,
+    );
     setPlans(next);
     setFeatured(next.find(plan => plan.plan_date === today)
       ?? next.find(plan => plan.plan_date > today && plan.status !== 'skipped')
@@ -164,7 +189,7 @@ export default function DashboardPage() {
       <main className="flex-1 px-4 py-5 space-y-4 max-w-lg mx-auto w-full pb-nav">
 
         {/* Unfinished workout banner */}
-          {(freeSession || legacyDraft) && (
+          {((freeSession && !wasEnded(freeSession.activityId)) || legacyDraft) && (
             <button
               onClick={() => setShowSheet(true)}
               className="w-full flex items-center gap-3 p-4 text-left min-h-11"
@@ -292,7 +317,7 @@ export default function DashboardPage() {
                       </p>
                     </div>
 
-                    {a.status === 'in_progress' && (
+                    {a.status === 'in_progress' && !wasEnded(a.id) && (
                       <span className="text-[10px] font-800 uppercase px-1.5 py-1" style={{ border: `2px solid ${MODERNIST.accent}`, color: MODERNIST.accentDeep }}>
                         Live
                       </span>
@@ -323,18 +348,32 @@ export default function DashboardPage() {
       </button>
 
       {planLog && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<SheetFallback />}>
           <PlanLogSheet
             plan={planLog.plan}
             autoStart={planLog.autoStart}
             bodyWeightKg={latestWeight?.weight ?? undefined}
             onClose={() => { setPlanLog(null); void refreshPlans(); }}
-            onSaved={() => { setPlanLog(null); setLoading(true); load(); void refreshPlans(); }}
+            onSaved={() => {
+              const finishedId = planLog.plan.id;
+              setPlanLog(null);
+              setFeatured(current => current?.id === finishedId ? { ...current, status: 'done' } : current);
+              setPlans(current => current.map(plan => plan.id === finishedId ? { ...plan, status: 'done' } : plan));
+              // Refresh only after the finish op lands, and drop the cached plan list first
+              // so a 60s-old in_progress row cannot paint Continue over a finished workout.
+              void (async () => {
+                await syncQueue.flush();
+                invalidateQueries('plans:');
+                invalidateQueries('activities:');
+                await refreshPlans().catch(() => undefined);
+                await load();
+              })();
+            }}
           />
         </Suspense>
       )}
       {showPlans && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<SheetFallback />}>
           <PlanListSheet
             plans={plans}
             today={new Date().toISOString().slice(0, 10)}
@@ -345,11 +384,17 @@ export default function DashboardPage() {
       )}
 
       {showSheet && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<SheetFallback />}>
           <LogWorkoutSheet
             open={showSheet}
-            onClose={() => { setShowSheet(false); setFreeSession(sessionStore.read(null)); setLegacyDraft(hasLegacyDraft()); setLoading(true); load(); }}
-            onSuccess={() => { setLoading(true); load(); setFreeSession(null); setLegacyDraft(false); }}
+            onClose={() => {
+              setShowSheet(false);
+              const existing = sessionStore.read(null);
+              setFreeSession(existing && !wasEnded(existing.activityId) ? existing : null);
+              setLegacyDraft(hasLegacyDraft());
+              void load();
+            }}
+            onSuccess={() => { void load(); setFreeSession(null); setLegacyDraft(false); }}
           />
         </Suspense>
       )}

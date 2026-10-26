@@ -105,6 +105,12 @@ body {
   overflow: hidden;
 }
 
+/* Keep the field above the keyboard after a set is logged and the list re-renders. */
+.sheet-panel input {
+  scroll-margin-top: 12px;
+  scroll-margin-bottom: 40vh;
+}
+
 /* ── Prevent iOS input zoom (font-size < 16px triggers auto-zoom) ── */
 input[type="text"],
 input[type="number"],
