@@ -13,7 +13,7 @@ import { toISODate } from '@/lib/utils';
 import { calcCardioCalories } from '@/engines/calorieEngine';
 import { strengthSessionMetrics } from '@/lib/sessionMetrics';
 import { bodyweightLabel } from '@/lib/planMath';
-import { globalSetNumber, newId, type LoadMode, type SessionCardio, type SessionSet, type WorkoutSession } from '@/lib/workoutSession';
+import { clearSession, globalSetNumber, newId, wasEnded, type LoadMode, type SessionCardio, type SessionSet, type WorkoutSession } from '@/lib/workoutSession';
 // Lazy: this sheet owns the recharts dependency (~400 KB raw).
 const ExerciseProgressSheet = lazy(() => import('./ExerciseProgressSheet'));
 import ExerciseProgressCard from './ExerciseProgressCard';
@@ -118,7 +118,13 @@ const TYPES = [
 export default function LogWorkoutSheet({ open, onClose, onSuccess, initialType, initialExerciseName }: Props) {
   const { user } = useAuth();
   // The unfinished session, if any. Every logged set is already in the database (or queued for it).
-  const [session, setSession] = useState<WorkoutSession | null>(() => sessionStore.read(null));
+  const [session, setSession] = useState<WorkoutSession | null>(() => {
+    const existing = sessionStore.read(null);
+    if (!existing) return null;
+    if (!wasEnded(existing.activityId)) return existing;
+    clearSession(null);
+    return null;
+  });
   const sessionRef = useRef(session);
   const commit = (next: WorkoutSession | null) => {
     sessionRef.current = next;

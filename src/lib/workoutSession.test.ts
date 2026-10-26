@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createSyncQueue } from './syncQueue';
-import { createSessionStore, globalSetNumber, setRow, type SessionSet } from './workoutSession';
+import { createSessionStore, globalSetNumber, planLogAction, setRow, wasEnded, type SessionSet } from './workoutSession';
 import { createFakeSessionServer } from '@/test/fakeSessionServer';
 
 const bench = (id: string, set_number: number, reps = 5): SessionSet => ({
@@ -55,6 +55,19 @@ describe('workout session store', () => {
     expect(server.state.activities.get(session.activityId)?.status).toBe('done');
     expect(server.state.activities.get(session.activityId)?.structured_metrics).toEqual({ calorieEstimate: { calories: 210 } });
     expect(store.read(null)).toBeNull();
+    expect(wasEnded(session.activityId)).toBe(true);
+    expect(planLogAction({ id: 'p1', status: 'in_progress', activity_id: session.activityId })).toBe('closed');
+  });
+
+  it('discard does not mark the session finished, so the plan can be started again', async () => {
+    const server = createFakeSessionServer();
+    const queue = createSyncQueue({ execute: server.execute });
+    const store = createSessionStore(queue);
+    const session = store.begin({ planId: 'p1', type: 'gym', date: '2026-10-19' });
+    store.discard(session);
+    await queue.flush();
+    expect(wasEnded(session.activityId)).toBe(false);
+    expect(planLogAction({ id: 'p1', status: 'planned', activity_id: null })).toBe('start');
   });
 });
 

@@ -1,7 +1,7 @@
 import { supabase } from '@/db/supabase';
 import { invalidateQueries } from '@/lib/queryCache';
 import { createSyncQueue, type SyncOp } from '@/lib/syncQueue';
-import { createSessionStore, type WorkoutSession } from '@/lib/workoutSession';
+import { createSessionStore, wasEnded, type WorkoutSession } from '@/lib/workoutSession';
 
 function check(error: { message: string } | null) {
   if (error) throw new Error(error.message);
@@ -164,6 +164,7 @@ function toSession(row: RemoteActivity, planId: string | null): WorkoutSession {
 export const sessionsService = {
   // Rebuilds a session from the database when this device has no local copy.
   load: async (activityId: string, planId: string | null): Promise<WorkoutSession | null> => {
+    if (wasEnded(activityId)) return null;
     const { data, error } = await supabase
       .from('activities')
       .select(REMOTE_COLUMNS)
@@ -184,7 +185,7 @@ export const sessionsService = {
       .limit(5);
     if (error || !data) return null;
     const row = (data as unknown as Array<RemoteActivity & { workout_plans: { id: string }[] | null }>)
-      .find(item => !item.workout_plans?.length);
+      .find(item => !item.workout_plans?.length && !wasEnded(item.id));
     return row ? toSession(row, null) : null;
   },
 };

@@ -1,7 +1,4 @@
-const APP_CACHE = 'performance-os-app-v5';
-const DATA_CACHE = 'performance-os-data-v5';
-const NETWORK_TIMEOUT_MS = 2500;
-const SUPABASE_HOST = 'gobicwnqqadquxpbdbae.supabase.co';
+const APP_CACHE = 'performance-os-app-v6';
 const MEDIA_CACHE = 'performance-os-media-v4';
 const MEDIA_METADATA_CACHE = 'performance-os-media-meta-v4';
 const WORKOUT_MEDIA_HOST = 'raw.githubusercontent.com';
@@ -110,30 +107,39 @@ async function cacheFirst(request, cacheName) {
   return response;
 }
 
-function fetchWithTimeout(request, timeoutMs) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(request, { signal: controller.signal }).finally(() => clearTimeout(timer));
+function isHashedAsset(url) {
+  return url.origin === self.location.origin && url.pathname.startsWith('/assets/');
 }
 
-async function networkFirstWithTimeout(request, cacheName, timeoutMs, fallbackRequest) {
+// Hashed Vite bundles are immutable. Everything else revalidates and falls back
+// to the cache only when the network fails — no short abort. A 2.5s abort was
+// dropping slow responses and, for Supabase, replaying stale workouts.
+async function networkFirst(request, cacheName) {
   const cache = await caches.open(cacheName);
   try {
-    const response = await fetchWithTimeout(request, timeoutMs);
-    if (canCache(response)) {
-      const cacheKey = request.mode === 'navigate' ? '/index.html' : request;
-      cache.put(cacheKey, response.clone());
-    }
+    const response = await fetch(request);
+    if (canCache(response)) cache.put(request, response.clone());
     return response;
   } catch {
-    const cached = await cache.match(request);
-    if (cached) return cached;
-    if (fallbackRequest) {
-      const fallback = await cache.match(fallbackRequest);
-      if (fallback) return fallback;
-    }
-    return Response.error();
+    return (await cache.match(request)) ?? Response.error();
   }
+}
+
+// The installed shell paints immediately. The network copy replaces it for the next open.
+async function shellFirst(request, event) {
+  const cache = await caches.open(APP_CACHE);
+  const cached = await cache.match('/index.html');
+  const update = fetch(request)
+    .then(response => {
+      if (canCache(response)) return cache.put('/index.html', response.clone()).then(() => response);
+      return response;
+    })
+    .catch(() => null);
+  if (cached) {
+    event.waitUntil(update.then(() => undefined));
+    return cached;
+  }
+  return (await update) ?? (await cache.match(request)) ?? Response.error();
 }
 
 async function cacheWorkoutMediaRequest(request, mediaCache, metadataCache) {
@@ -203,7 +209,7 @@ self.addEventListener('activate', event => {
     caches.keys()
       .then(keys => Promise.all(
         keys
-          .filter(key => ![APP_CACHE, DATA_CACHE, MEDIA_CACHE, MEDIA_METADATA_CACHE].includes(key))
+          .filter(key => ![APP_CACHE, MEDIA_CACHE, MEDIA_METADATA_CACHE].includes(key))
           .map(key => caches.delete(key)),
       ))
       .then(() => self.clients.claim()),
@@ -232,22 +238,22 @@ self.addEventListener('fetch', event => {
 
   const url = new URL(request.url);
 
-  if (request.mode === 'navigate') {
-    event.respondWith(networkFirstWithTimeout(request, APP_CACHE, NETWORK_TIMEOUT_MS, '/index.html'));
+  // API calls (Supabase included) stay on the network. They are tiny, authenticated,
+  // and change every set; caching them made a finished workout look in progress.
+  if (url.origin !== self.location.origin) {
+    if (isWorkoutMediaUrl(url)) event.respondWith(cacheFirstWorkoutMedia(request, event));
     return;
   }
 
-  if (url.origin === self.location.origin) {
+  if (request.mode === 'navigate') {
+    event.respondWith(shellFirst(request, event));
+    return;
+  }
+
+  if (isHashedAsset(url)) {
     event.respondWith(cacheFirst(request, APP_CACHE));
     return;
   }
 
-  if (url.hostname === SUPABASE_HOST && !url.pathname.includes('/auth/')) {
-    event.respondWith(networkFirstWithTimeout(request, DATA_CACHE, NETWORK_TIMEOUT_MS));
-    return;
-  }
-
-  if (isWorkoutMediaUrl(url)) {
-    event.respondWith(cacheFirstWorkoutMedia(request, event));
-  }
+  event.respondWith(networkFirst(request, APP_CACHE));
 });

@@ -386,6 +386,76 @@ describe('PlanLogSheet sessions', () => {
     await settle();
     expect(server.current!.state.sets.size).toBe(0);
   });
+
+  it('keeps the rest of the workout mounted when a set is logged', async () => {
+    const user = userEvent.setup();
+    render(<PlanLogSheet plan={sorted} autoStart onClose={() => undefined} onSaved={() => undefined} />);
+    const incline = screen.getByRole('textbox', { name: 'Incline Dumbbell Press set 1 reps' });
+    expect((incline as HTMLInputElement).value).toBe('10');
+    await user.click(screen.getAllByRole('button', { name: 'Log set 1' })[0]);
+    expect(screen.getByRole('textbox', { name: 'Incline Dumbbell Press set 1 reps' })).toBe(incline);
+    expect((incline as HTMLInputElement).value).toBe('10');
+    await waitFor(() => expect(document.activeElement).toBe(incline));
+  });
+
+  it('skips the cardio item without leaving the workout incomplete', async () => {
+    const user = userEvent.setup();
+    const first = render(<PlanLogSheet plan={sorted} autoStart onClose={() => undefined} onSaved={() => undefined} />);
+    await user.click(screen.getAllByRole('button', { name: 'Log set 1' })[0]);
+    await user.click(screen.getByRole('button', { name: 'Skip cardio' }));
+    const skipped = screen.getByRole('button', { name: 'Skipped cardio, tap to undo' });
+    expect(skipped.getAttribute('aria-pressed')).toBe('true');
+    expect(document.querySelector('[data-testid="plan-cardio"]')?.getAttribute('data-state')).toBe('skipped');
+    expect((screen.getByRole('button', { name: 'Log cardio' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/Finishing still completes this workout/)).toBeTruthy();
+    first.unmount();
+
+    render(<PlanLogSheet plan={{ ...sorted, status: 'in_progress', activity_id: 'plan-1' }} onClose={() => undefined} onSaved={() => undefined} />);
+    later();
+    await user.click(screen.getByRole('button', { name: 'Skipped cardio, tap to undo' }));
+    expect(screen.getByRole('button', { name: 'Skip cardio' })).toBeTruthy();
+    expect(document.querySelector('[data-testid="plan-cardio"]')?.getAttribute('data-state')).toBe('pending');
+    later();
+    await user.click(screen.getByRole('button', { name: 'Skip cardio' }));
+    await user.click(screen.getByRole('button', { name: /Finish workout/ }));
+    await settle();
+    expect(server.current!.state.activities.get('plan-1')?.status).toBe('done');
+    expect(server.current!.state.plans.get('plan-1')?.status).toBe('done');
+    expect([...server.current!.state.cardio.values()]).toEqual([]);
+    expect(server.current!.state.plans.get('plan-1')?.status).not.toBe('skipped');
+  });
+
+  it('does not offer logging after the workout is finished, even if the plan still says in progress', async () => {
+    const user = userEvent.setup();
+    const first = render(<PlanLogSheet plan={sorted} autoStart onClose={() => undefined} onSaved={() => undefined} />);
+    await user.click(screen.getAllByRole('button', { name: 'Log set 1' })[0]);
+    await user.click(screen.getByRole('button', { name: /Finish workout/ }));
+    await settle();
+    first.unmount();
+
+    remote.session = {
+      version: 1, activityId: 'plan-1', planId: 'plan-1', type: 'gym', subType: null, date: '2026-10-19', notes: '', tags: [], startedAt: Date.now(),
+      sets: [{ id: 'remote-set', exercise_id: 'bench', exercise_name: 'Bench Press', set_number: 1, reps: 8, weight: 40, rpe: null, plan_set_id: 'ps-1' }],
+      cardio: [], skipped: [], extras: [],
+    };
+    render(<PlanLogSheet plan={{ ...sorted, status: 'in_progress', activity_id: 'plan-1' }} autoStart onClose={() => undefined} onSaved={() => undefined} />);
+    await settle();
+    expect(screen.queryByRole('button', { name: /Log set/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Finish workout/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Start workout' })).toBeNull();
+    expect(screen.getByText('This workout is finished. Logged sets are in your history.')).toBeTruthy();
+    expect(screen.getByText(/2026-10-19 · done/)).toBeTruthy();
+    expect(server.current!.state.calls.filter(call => call === 'start')).toEqual(['start']);
+  });
+
+  it('does not start a session when a done plan is opened with autoStart', async () => {
+    render(<PlanLogSheet plan={{ ...sorted, status: 'done', activity_id: 'old-session' }} autoStart onClose={() => undefined} onSaved={() => undefined} />);
+    await settle();
+    expect(screen.queryByRole('button', { name: /Log set|Skip set|Skip cardio|Finish workout|Start workout/ })).toBeNull();
+    expect(screen.getByText('This workout is finished. Logged sets are in your history.')).toBeTruthy();
+    expect(server.current!.state.calls).toEqual([]);
+    expect(server.current!.state.activities.size).toBe(0);
+  });
 });
 
 describe('PlanLogSheet view only', () => {
